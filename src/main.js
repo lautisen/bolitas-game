@@ -9,15 +9,15 @@ bgmAudio.volume = 0.4;
 const COLS = 10;
 const ROWS = 12;
 const MIN_GROUP = 3;
-const COLORS = ['red', 'blue', 'green', 'yellow', 'purple'];
+const COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink'];
 
 const LEVELS = [
-  { target: 200, rows: 5, cols: 5, colors: 3 }, // Nivel 1 Tutorial
-  { target: 500, rows: 7, cols: 7, colors: 4 }, // Nivel 2
+  { target: 200, rows: 5, cols: 5, colors: 3 },   // Nivel 1 Tutorial
+  { target: 500, rows: 7, cols: 7, colors: 4 },   // Nivel 2
   { target: 1000, rows: 10, cols: 10, colors: 4 }, // Nivel 3
   { target: 1500, rows: 12, cols: 10, colors: 5 }, // Nivel 4
-  { target: 2500, rows: 15, cols: 12, colors: 6 }, // Nivel 5
-  { target: 4000, rows: 20, cols: 15, colors: 7 }, // Nivel 6+
+  { target: 2500, rows: 12, cols: 12, colors: 5 }, // Nivel 5
+  { target: 4000, rows: 14, cols: 12, colors: 6 }, // Nivel 6+
 ];
 
 let currentMode = 'adventure'; // 'adventure', 'zen', 'timeattack'
@@ -43,6 +43,11 @@ let isAudioEnabled = true;
 let isColorblindEnabled = false;
 let hintTimeout = null;
 const HINT_DELAY = 15000; // 15 seconds
+
+// Performance: O(1) element-to-position lookup instead of O(rows*cols) scan
+const elementPositionMap = new WeakMap();
+// Performance: track hinted elements to avoid querySelectorAll
+let hintedElements = [];
 
 document.addEventListener('DOMContentLoaded', () => {
   uiScore = document.getElementById('score');
@@ -227,6 +232,7 @@ function initGame() {
   isAnimating = false;
   selectedGroup = [];
   comboMultiplier = 1;
+  hintedElements = [];
   clearInterval(timerInterval);
 
   // Configure grid based on mode
@@ -240,8 +246,8 @@ function initGame() {
     currentCols = 15;
     currentColors = 5;
   } else if (currentMode === 'timeattack') {
-    currentRows = 20;
-    currentCols = 20;
+    currentRows = 12;
+    currentCols = 12;
     currentColors = 6; // To keep it challenging but not impossible
     timeRemaining = 60; // 60 seconds
     startTimer();
@@ -294,12 +300,14 @@ function createBolita(r, c, color) {
 
   uiGrid.appendChild(el);
 
-  grid[r][c] = {
+  const bolitaObj = {
     color,
     el,
     r,
     c
   };
+  grid[r][c] = bolitaObj;
+  elementPositionMap.set(el, bolitaObj);
 }
 
 async function handleBolitaClick(startR, startC, el) {
@@ -456,13 +464,8 @@ function spawnFloatingScore(points, combo, targetEl) {
 }
 
 function findBolitaByElement(el) {
-  for (let r = 0; r < currentRows; r++) {
-    for (let c = 0; c < currentCols; c++) {
-      if (grid[r][c] && grid[r][c].el === el) {
-        return { r, c };
-      }
-    }
-  }
+  const obj = elementPositionMap.get(el);
+  if (obj) return { r: obj.r, c: obj.c };
   return null;
 }
 
@@ -597,7 +600,10 @@ function resetHintTimer() {
 }
 
 function clearHint() {
-  document.querySelectorAll('.bolita.hint').forEach(el => el.classList.remove('hint'));
+  for (const el of hintedElements) {
+    el.classList.remove('hint');
+  }
+  hintedElements = [];
 }
 
 function showHint() {
@@ -607,6 +613,7 @@ function showHint() {
   group.forEach(({ r, c }) => {
     if (grid[r][c] && grid[r][c].el) {
       grid[r][c].el.classList.add('hint');
+      hintedElements.push(grid[r][c].el);
     }
   });
 }

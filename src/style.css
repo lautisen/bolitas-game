@@ -11,6 +11,8 @@
   --clr-green: #10b981;
   --clr-yellow: #f59e0b;
   --clr-purple: #8b5cf6;
+  --clr-orange: #f97316;
+  --clr-pink: #ec4899;
 }
 
 /* Generic utility: hide any element */
@@ -207,6 +209,14 @@ header {
 
 .bolita[data-color="purple"] {
   background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), var(--clr-purple) 60%);
+}
+
+.bolita[data-color="orange"] {
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), var(--clr-orange) 60%);
+}
+
+.bolita[data-color="pink"] {
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), var(--clr-pink) 60%);
 }
 
 .bolita.selected {
