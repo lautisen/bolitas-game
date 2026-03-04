@@ -230,16 +230,18 @@ header {
 
 .bolita.hint {
   z-index: 4;
-  animation: hintPulse 1.2s infinite alternate ease-in-out;
+  animation: hintPulse 0.6s infinite alternate ease-in-out;
 }
 
 @keyframes hintPulse {
   0% {
-    opacity: 1;
+    filter: brightness(1.2);
+    box-shadow: inset -3px -3px 6px rgba(0, 0, 0, 0.35), inset 3px 3px 6px rgba(255, 255, 255, 0.25);
   }
 
   100% {
-    opacity: 0.4;
+    filter: brightness(1.8);
+    box-shadow: inset -3px -3px 6px rgba(0, 0, 0, 0.35), inset 3px 3px 6px rgba(255, 255, 255, 0.25), 0 0 20px rgba(255, 255, 255, 0.9);
   }
 }
 
@@ -278,13 +280,12 @@ body.color-blind-mode .bolita[data-color="blue"]::after {
 
 body.color-blind-mode .bolita[data-color="green"]::after {
   /* Triangle */
-  background-color: transparent;
-  width: 0;
-  height: 0;
-  border-left: 20px solid transparent;
-  border-right: 20px solid transparent;
-  border-bottom: 35px solid rgba(255, 255, 255, 0.8);
-  top: 40%;
+  background-color: rgba(255, 255, 255, 0.8);
+  border: none;
+  width: 35%;
+  height: 35%;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  top: 50%;
 }
 
 body.color-blind-mode .bolita[data-color="yellow"]::after {
@@ -304,7 +305,7 @@ body.color-blind-mode .bolita[data-color="purple"]::after {
   height: 50%;
 }
 
-body.color-blind-mode .bolita[data-color="cyan"]::after {
+body.color-blind-mode .bolita[data-color="pink"]::after {
   /* Donut */
   border-radius: 50%;
   background-color: transparent;
