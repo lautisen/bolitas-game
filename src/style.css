@@ -720,9 +720,9 @@ footer {
 .tutorial-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  width: 140px;
-  height: 140px;
+  gap: 2px;
+  width: 130px;
+  height: 130px;
 }
 
 .tutorial-ball {
