@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Gloop</string>
+    <string name="title_activity_main">Gloop</string>
+    <string name="package_name">com.dreaminraw.bolitas</string>
+    <string name="custom_url_scheme">com.dreaminraw.bolitas</string>
+</resources>

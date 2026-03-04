@@ -1,0 +1,10 @@
+{
+  "appId": "com.lautisen.bolitas",
+  "appName": "Bolitas",
+  "webDir": "dist",
+  "plugins": {
+    "AdMob": {
+      "appId": "ca-app-pub-3539090903954344~8178124179"
+    }
+  }
+}
