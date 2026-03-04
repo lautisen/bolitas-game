@@ -1,0 +1,7 @@
+# Schema for Bolitas Leaderboard
+
+type LeaderboardEntry @table {
+  # The player's username acts as the ID
+  id: String!
+  score: Int!
+}

@@ -1,0 +1,5 @@
+mutation UpsertScore($id: String!, $score: Int!) @auth(level: PUBLIC) {
+  leaderboardEntry_upsert(
+    data: { id: $id, score: $score }
+  )
+}

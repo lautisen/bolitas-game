@@ -1,0 +1,185 @@
+"""
+✨ `LeaderboardEntry_KeyOutput` returns the primary key fields of table type `LeaderboardEntry`.
+
+It has the same format as `LeaderboardEntry_Key`, but is only used as mutation return value.
+"""
+scalar LeaderboardEntry_KeyOutput
+"""
+✨ Generated data input type for table 'LeaderboardEntry'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input LeaderboardEntry_Data {
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `LeaderboardEntry`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score` of type `Int!`
+  """
+  score: Int
+  """
+  ✨ `_expr` server value variant of `score` (✨ Generated from Field `LeaderboardEntry`.`score` of type `Int!`)
+  """
+  score_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `score` (✨ Generated from Field `LeaderboardEntry`.`score` of type `Int!`)
+  """
+  score_update: [Int_Update!]
+}
+"""
+✨ Generated filter input type for table 'LeaderboardEntry'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input LeaderboardEntry_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [LeaderboardEntry_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: LeaderboardEntry_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [LeaderboardEntry_Filter!]
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`id` of type `String!`
+  """
+  id: String_Filter
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score` of type `Int!`
+  """
+  score: Int_Filter
+}
+"""
+✨ Generated first-row input type for table 'LeaderboardEntry'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input LeaderboardEntry_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [LeaderboardEntry_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: LeaderboardEntry_Filter
+}
+"""
+✨ Generated having input type for table 'LeaderboardEntry'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input LeaderboardEntry_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [LeaderboardEntry_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: LeaderboardEntry_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [LeaderboardEntry_Having!]
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score_count` of type `Int!`
+  """
+  score_count: Int_Filter
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score_sum` of type `Int`
+  """
+  score_sum: Int_Filter
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score_avg` of type `Float`
+  """
+  score_avg: Float_Filter
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score_min` of type `Int`
+  """
+  score_min: Int_Filter
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score_max` of type `Int`
+  """
+  score_max: Int_Filter
+}
+"""
+✨ Generated key input type for table 'LeaderboardEntry'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input LeaderboardEntry_Key {
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `LeaderboardEntry`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+}
+"""
+✨ Generated list filter input type for table 'LeaderboardEntry'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input LeaderboardEntry_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: LeaderboardEntry_Filter
+}
+"""
+✨ Generated order input type for table 'LeaderboardEntry'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input LeaderboardEntry_Order {
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`id` of type `String!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score` of type `Int!`
+  """
+  score: OrderDirection
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score_count` of type `Int!`
+  """
+  score_count: OrderDirection
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score_sum` of type `Int`
+  """
+  score_sum: OrderDirection
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score_avg` of type `Float`
+  """
+  score_avg: OrderDirection
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score_min` of type `Int`
+  """
+  score_min: OrderDirection
+  """
+  ✨ Generated from Field `LeaderboardEntry`.`score_max` of type `Int`
+  """
+  score_max: OrderDirection
+}
