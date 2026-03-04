@@ -42,7 +42,7 @@ let comboTimeout = null;
 let isAudioEnabled = true;
 let isColorblindEnabled = false;
 let hintTimeout = null;
-const HINT_DELAY = 15000; // 15 seconds
+const HINT_DELAY = 8000; // 8 seconds
 
 // Performance: O(1) element-to-position lookup instead of O(rows*cols) scan
 const elementPositionMap = new WeakMap();
@@ -61,6 +61,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('back-to-menu-btn').addEventListener('click', returnToMainMenu);
   document.getElementById('show-leaderboard-btn').addEventListener('click', showLeaderboard);
   document.getElementById('close-leaderboard-btn').addEventListener('click', hideLeaderboard);
+  document.getElementById('celebration-continue-btn').addEventListener('click', () => {
+    document.getElementById('clear-celebration').classList.add('hidden');
+    document.getElementById('confetti-container').innerHTML = '';
+    if (currentMode === 'adventure') {
+      handleLevelComplete();
+    } else {
+      showGameOver(false);
+    }
+  });
   document.getElementById('logout-settings-btn').addEventListener('click', () => {
     document.getElementById('settings-screen').classList.add('hidden');
     logoutUser();
@@ -377,6 +386,12 @@ async function handleBolitaClick(startR, startC, el) {
       });
       isAnimating = false;
 
+      // Check if the board is completely clear
+      if (isBoardClear()) {
+        showCelebration();
+        return;
+      }
+
       if (!checkPossibleMoves()) {
         // In adventure mode, check if the target was reached
         if (currentMode === 'adventure') {
@@ -654,4 +669,39 @@ function handleLevelComplete() {
   document.getElementById('final-score').innerText = score;
   document.getElementById('play-again-btn').innerText = "Siguiente Nivel";
   document.getElementById('game-over').classList.remove('hidden');
+}
+
+function isBoardClear() {
+  for (let r = 0; r < currentRows; r++) {
+    for (let c = 0; c < currentCols; c++) {
+      if (grid[r][c] !== null) return false;
+    }
+  }
+  return true;
+}
+
+function showCelebration() {
+  clearInterval(timerInterval);
+  clearTimeout(hintTimeout);
+
+  document.getElementById('celebration-score').innerText = score;
+  document.getElementById('clear-celebration').classList.remove('hidden');
+
+  // Spawn confetti particles
+  const container = document.getElementById('confetti-container');
+  container.innerHTML = '';
+  const colors = ['#ff3b5c', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ff6b6b', '#06d6a0', '#ffd166'];
+
+  for (let i = 0; i < 60; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = `${Math.random() * 100}%`;
+    piece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.animationDuration = `${1.5 + Math.random() * 2}s`;
+    piece.style.animationDelay = `${Math.random() * 1.5}s`;
+    piece.style.width = `${6 + Math.random() * 8}px`;
+    piece.style.height = `${6 + Math.random() * 8}px`;
+    piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+    container.appendChild(piece);
+  }
 }
