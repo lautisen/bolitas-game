@@ -226,6 +226,12 @@ function returnToMainMenu() {
 }
 
 function startGame() {
+  // Show tutorial before adventure mode level 1 (only once)
+  if (currentMode === 'adventure' && currentLevelIndex === 0 && !localStorage.getItem('bolitasTutorialDone')) {
+    showTutorial();
+    return;
+  }
+
   document.getElementById('login-screen').classList.add('hidden');
   if (isAudioEnabled) {
     bgmAudio.play().catch(e => console.log('Autoplay prevented'));
@@ -704,4 +710,56 @@ function showCelebration() {
     piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
     container.appendChild(piece);
   }
+}
+
+// Tutorial system
+function showTutorial() {
+  const totalSteps = 3;
+  let currentStep = 1;
+
+  const screen = document.getElementById('tutorial-screen');
+  const btn = document.getElementById('tutorial-next-btn');
+  const dotsContainer = document.getElementById('tutorial-dots');
+
+  // Create dots
+  dotsContainer.innerHTML = '';
+  for (let i = 1; i <= totalSteps; i++) {
+    const dot = document.createElement('span');
+    dot.className = `tutorial-dot${i === 1 ? ' active' : ''}`;
+    dotsContainer.appendChild(dot);
+  }
+
+  // Show first step
+  document.querySelectorAll('.tutorial-step').forEach(s => s.classList.add('hidden'));
+  document.querySelector('.tutorial-step[data-step="1"]').classList.remove('hidden');
+  btn.innerText = 'Siguiente';
+  screen.classList.remove('hidden');
+
+  // Remove old listeners by cloning
+  const newBtn = btn.cloneNode(true);
+  btn.parentNode.replaceChild(newBtn, btn);
+
+  newBtn.addEventListener('click', () => {
+    if (currentStep < totalSteps) {
+      // Hide current, show next
+      document.querySelector(`.tutorial-step[data-step="${currentStep}"]`).classList.add('hidden');
+      currentStep++;
+      document.querySelector(`.tutorial-step[data-step="${currentStep}"]`).classList.remove('hidden');
+
+      // Update dots
+      dotsContainer.querySelectorAll('.tutorial-dot').forEach((d, i) => {
+        d.classList.toggle('active', i + 1 === currentStep);
+      });
+
+      // Last step: change button text
+      if (currentStep === totalSteps) {
+        newBtn.innerText = '¡A Jugar!';
+      }
+    } else {
+      // Tutorial complete
+      localStorage.setItem('bolitasTutorialDone', 'true');
+      screen.classList.add('hidden');
+      startGame(); // Now actually start the game
+    }
+  });
 }

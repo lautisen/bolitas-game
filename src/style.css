@@ -692,3 +692,99 @@ footer {
   color: var(--text-dim);
   margin-bottom: 0.5rem !important;
 }
+
+/* Tutorial */
+.tutorial-panel {
+  max-width: 340px;
+  text-align: center;
+}
+
+.tutorial-panel h2 {
+  font-size: 1.3rem;
+  margin-bottom: 0.8rem;
+}
+
+.tutorial-panel p {
+  font-size: 0.95rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+  margin-top: 0.8rem;
+}
+
+.tutorial-demo {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.tutorial-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 140px;
+  height: 140px;
+}
+
+.tutorial-ball {
+  border-radius: 50%;
+  aspect-ratio: 1;
+  transition: all 0.3s;
+}
+
+.tutorial-ball.highlighted {
+  animation: hintPulse 0.8s infinite alternate ease-in-out;
+  box-shadow: 0 0 10px 3px rgba(255, 255, 255, 0.4);
+}
+
+.tutorial-ball.selected-demo {
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.9);
+  animation: selectedPulse 0.8s infinite alternate ease-in-out;
+}
+
+.tutorial-ball.empty-demo {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+}
+
+.tutorial-ball.falling-demo {
+  animation: tutorialFall 1.2s infinite ease-in-out;
+}
+
+@keyframes tutorialFall {
+
+  0%,
+  40% {
+    transform: translateY(0);
+  }
+
+  60%,
+  100% {
+    transform: translateY(8px);
+    opacity: 0.7;
+  }
+}
+
+.tutorial-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 1.2rem;
+}
+
+#tutorial-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.tutorial-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background 0.3s;
+}
+
+.tutorial-dot.active {
+  background: rgba(255, 255, 255, 0.8);
+}
