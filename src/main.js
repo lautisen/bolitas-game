@@ -41,6 +41,8 @@ let comboTimeout = null;
 
 let isAudioEnabled = true;
 let isColorblindEnabled = false;
+let hintTimeout = null;
+const HINT_DELAY = 15000; // 15 seconds
 
 document.addEventListener('DOMContentLoaded', () => {
   uiScore = document.getElementById('score');
@@ -51,16 +53,32 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('play-again-btn').addEventListener('click', returnToMainMenu);
   document.getElementById('login-btn').addEventListener('click', handleLogin);
   document.getElementById('logout-btn').addEventListener('click', logoutUser);
+  document.getElementById('back-to-menu-btn').addEventListener('click', returnToMainMenu);
   document.getElementById('show-leaderboard-btn').addEventListener('click', showLeaderboard);
   document.getElementById('close-leaderboard-btn').addEventListener('click', hideLeaderboard);
+  document.getElementById('logout-settings-btn').addEventListener('click', () => {
+    document.getElementById('settings-screen').classList.add('hidden');
+    logoutUser();
+  });
 
-  // Settings Handlers
+  // Settings Handlers (header button)
   document.getElementById('settings-btn').addEventListener('click', () => {
     document.getElementById('settings-screen').classList.remove('hidden');
   });
   document.getElementById('close-settings-btn').addEventListener('click', () => {
     document.getElementById('settings-screen').classList.add('hidden');
   });
+
+  // Overlay settings/leaderboard buttons (multiple across screens)
+  document.querySelectorAll('.overlay-settings-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('settings-screen').classList.remove('hidden');
+    });
+  });
+  document.querySelectorAll('.overlay-leaderboard-btn').forEach(btn => {
+    btn.addEventListener('click', showLeaderboard);
+  });
+
   document.getElementById('audio-toggle').addEventListener('change', (e) => {
     isAudioEnabled = e.target.checked;
     if (isAudioEnabled) {
@@ -248,6 +266,8 @@ function initGame() {
   // Ensure there's at least one move to start with
   if (!checkPossibleMoves()) {
     initGame(); // Reroll if totally unplayable from the start
+  } else {
+    resetHintTimer();
   }
 }
 
@@ -297,6 +317,8 @@ async function handleBolitaClick(startR, startC, el) {
   if (isAlreadySelected) {
     // Proceed to pop
     isAnimating = true;
+    clearHint();
+    clearTimeout(hintTimeout);
 
     // Pop animation
     const groupToPop = [...selectedGroup];
@@ -359,6 +381,8 @@ async function handleBolitaClick(startR, startC, el) {
         } else {
           showGameOver(false);
         }
+      } else {
+        resetHintTimer();
       }
     }, 400); // 400ms matches CSS transition
   } else {
@@ -399,6 +423,7 @@ async function handleBolitaClick(startR, startC, el) {
     } else {
       if (isAudioEnabled) playErrorSound();
     }
+    resetHintTimer();
   }
 }
 
@@ -511,6 +536,11 @@ function updateScore(points) {
 }
 
 function checkPossibleMoves() {
+  return findValidGroup() !== null;
+}
+
+// Returns the first valid group found, or null if none
+function findValidGroup() {
   const visited = new Set();
 
   for (let r = 0; r < currentRows; r++) {
@@ -521,16 +551,15 @@ function checkPossibleMoves() {
       if (visited.has(key)) continue;
 
       const targetColor = grid[r][c].color;
-      let count = 0;
+      const group = [];
 
-      // local dfs to count component size
       const queue = [{ r, c }];
       const localVisited = new Set();
       localVisited.add(key);
 
       while (queue.length > 0) {
         const curr = queue.shift();
-        count++;
+        group.push(curr);
         visited.add(`${curr.r},${curr.c}`);
 
         const neighbors = [
@@ -551,13 +580,35 @@ function checkPossibleMoves() {
         }
       }
 
-      if (count >= MIN_GROUP) {
-        return true; // Found at least one valid move
+      if (group.length >= MIN_GROUP) {
+        return group;
       }
     }
   }
 
-  return false; // No moves left
+  return null;
+}
+
+// Hint system: highlight a valid group after inactivity
+function resetHintTimer() {
+  clearTimeout(hintTimeout);
+  clearHint();
+  hintTimeout = setTimeout(showHint, HINT_DELAY);
+}
+
+function clearHint() {
+  document.querySelectorAll('.bolita.hint').forEach(el => el.classList.remove('hint'));
+}
+
+function showHint() {
+  const group = findValidGroup();
+  if (!group) return;
+
+  group.forEach(({ r, c }) => {
+    if (grid[r][c] && grid[r][c].el) {
+      grid[r][c].el.classList.add('hint');
+    }
+  });
 }
 
 async function showGameOver(timeout = false) {

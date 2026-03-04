@@ -42,9 +42,7 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: linear-gradient(180deg, rgba(40, 26, 61, 0.95), rgba(15, 16, 22, 0.98));
   border-left: 1px solid rgba(255, 255, 255, 0.05);
   border-right: 1px solid rgba(255, 255, 255, 0.05);
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
@@ -155,6 +153,7 @@ header {
   border: 1px solid rgba(255, 255, 255, 0.05);
   box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
   overflow: hidden;
+  container-type: size;
 }
 
 .bolita {
@@ -162,73 +161,85 @@ header {
   /* Leaves 10% gap inside its cell to avoid looking like a solid block */
   width: calc((100% / var(--cols)) * 0.9);
   height: calc((100% / var(--rows)) * 0.9);
-  left: calc((var(--col) * 100% / var(--cols)) + (100% / var(--cols) * 0.05));
-  top: calc((var(--row) * 100% / var(--rows)) + (100% / var(--rows) * 0.05));
+  left: 0;
+  top: 0;
+  transform: translate3d(calc((var(--col) * 100cqw / var(--cols)) + (100cqw / var(--cols) * 0.05)),
+      calc((var(--row) * 100cqh / var(--rows)) + (100cqh / var(--rows) * 0.05)),
+      0);
   border-radius: 50%;
   box-shadow:
-    inset -4px -4px 10px rgba(0, 0, 0, 0.4),
-    inset 4px 4px 10px rgba(255, 255, 255, 0.4),
-    0 5px 15px rgba(0, 0, 0, 0.3);
-  transition:
-    top 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
-    left 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
-    transform 0.1s,
-    opacity 0.3s;
+    inset -3px -3px 6px rgba(0, 0, 0, 0.35),
+    inset 3px 3px 6px rgba(255, 255, 255, 0.25);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
   cursor: pointer;
   z-index: 1;
+  will-change: transform, opacity;
+  contain: layout style;
 }
 
 .bolita:hover {
-  transform: scale(1.05);
+  filter: brightness(1.15);
   z-index: 10;
 }
 
 .bolita.popped {
-  transform: scale(0) rotate(90deg);
   opacity: 0;
+  filter: blur(2px);
+  transition: opacity 0.25s, filter 0.25s;
 }
 
 /* Bolita Colors */
 .bolita[data-color="red"] {
-  background: var(--clr-red);
-  box-shadow: inset -4px -4px 10px rgba(0, 0, 0, 0.5), inset 4px 4px 10px rgba(255, 255, 255, 0.4), 0 0 15px rgba(255, 59, 92, 0.5);
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), var(--clr-red) 60%);
 }
 
 .bolita[data-color="blue"] {
-  background: var(--clr-blue);
-  box-shadow: inset -4px -4px 10px rgba(0, 0, 0, 0.5), inset 4px 4px 10px rgba(255, 255, 255, 0.4), 0 0 15px rgba(59, 130, 246, 0.5);
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), var(--clr-blue) 60%);
 }
 
 .bolita[data-color="green"] {
-  background: var(--clr-green);
-  box-shadow: inset -4px -4px 10px rgba(0, 0, 0, 0.5), inset 4px 4px 10px rgba(255, 255, 255, 0.4), 0 0 15px rgba(16, 185, 129, 0.5);
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), var(--clr-green) 60%);
 }
 
 .bolita[data-color="yellow"] {
-  background: var(--clr-yellow);
-  box-shadow: inset -4px -4px 10px rgba(0, 0, 0, 0.5), inset 4px 4px 10px rgba(255, 255, 255, 0.4), 0 0 15px rgba(245, 158, 11, 0.5);
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), var(--clr-yellow) 60%);
 }
 
 .bolita[data-color="purple"] {
-  background: var(--clr-purple);
-  box-shadow: inset -4px -4px 10px rgba(0, 0, 0, 0.5), inset 4px 4px 10px rgba(255, 255, 255, 0.4), 0 0 15px rgba(139, 92, 246, 0.5);
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), var(--clr-purple) 60%);
 }
 
 .bolita.selected {
   z-index: 5;
-  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.8), 0 5px 15px rgba(0, 0, 0, 0.5) !important;
+  outline: 3px solid rgba(255, 255, 255, 0.85);
+  outline-offset: -3px;
   animation: selectedPulse 0.8s infinite alternate ease-in-out;
+}
+
+.bolita.hint {
+  z-index: 4;
+  animation: hintPulse 1.2s infinite alternate ease-in-out;
+}
+
+@keyframes hintPulse {
+  0% {
+    box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.3);
+    transform: scale(1);
+  }
+
+  100% {
+    box-shadow: 0 0 16px 6px rgba(255, 255, 255, 0.6);
+    transform: scale(1.08);
+  }
 }
 
 @keyframes selectedPulse {
   0% {
-    transform: scale(0.95);
     filter: brightness(1.1);
   }
 
   100% {
-    transform: scale(1.05);
-    filter: brightness(1.3);
+    filter: brightness(1.4);
   }
 }
 
@@ -569,4 +580,23 @@ footer {
     transform: translate(-50%, -200%) scale(1);
     opacity: 0;
   }
+}
+
+.overlay-footer-buttons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.overlay-footer-icons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.overlay-footer-buttons .text-btn {
+  margin-top: 0;
 }
