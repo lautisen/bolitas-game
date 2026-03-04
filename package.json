@@ -11,10 +11,19 @@
     "deploy": "gh-pages -d dist"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.1.0",
     "gh-pages": "^6.3.0",
     "vite": "^7.3.1"
   },
   "dependencies": {
+    "@capacitor-community/admob": "^8.0.0",
+    "@capacitor-firebase/app": "^8.1.0",
+    "@capacitor-firebase/crashlytics": "^8.1.0",
+    "@capacitor-firebase/remote-config": "^8.1.0",
+    "@capacitor/android": "^8.1.0",
+    "@capacitor/app": "^8.0.1",
+    "@capacitor/core": "^8.1.0",
+    "@capacitor/ios": "^8.1.0",
     "@dataconnect/generated": "file:src/dataconnect-generated",
     "firebase": "^12.10.0"
   }

@@ -1,6 +1,8 @@
 import './style.css';
 import { saveScore, getLeaderboard } from './firebase.js';
 import { playSelectSound, playPopSound, playErrorSound, playGameOverSound } from './audio.js';
+import { checkAppVersion } from './versionCheck.js';
+import { AdMob, BannerAdSize, BannerAdPosition, BannerAdPluginEvents } from '@capacitor-community/admob';
 
 const bgmAudio = new Audio('./assets/bgm.mp3');
 bgmAudio.loop = true;
@@ -52,6 +54,7 @@ let isAudioEnabled = true;
 let isColorblindEnabled = false;
 let hintTimeout = null;
 const HINT_DELAY = 5000; // 5 seconds
+let hasUsedRevive = false;
 
 // Performance: O(1) element-to-position lookup instead of O(rows*cols) scan
 const elementPositionMap = new WeakMap();
@@ -61,6 +64,9 @@ let hintedElements = [];
 document.addEventListener('DOMContentLoaded', () => {
   uiScore = document.getElementById('score');
   uiGrid = document.getElementById('grid');
+
+  // Check for updates
+  checkAppVersion();
 
   // UI Handlers
   document.getElementById('restart-btn').addEventListener('click', initGame);
@@ -135,8 +141,126 @@ document.addEventListener('DOMContentLoaded', () => {
     startGame();
   });
 
+  document.getElementById('revive-btn').addEventListener('click', showRewardedAd);
+
   checkExistingSession();
+  initAdMob();
 });
+
+async function initAdMob() {
+  try {
+    await AdMob.initialize({});
+    console.log('AdMob initialized');
+
+    // Listeners for Rewarded Ad
+    AdMob.addListener('onRewardedVideoAdRewarded', (rewardItem) => {
+      console.log('User was rewarded', rewardItem);
+      applyReviveReward();
+    });
+
+  } catch (err) {
+    console.error('AdMob initialization failed', err);
+  }
+}
+
+async function prepareInterstitial() {
+  try {
+    const options = {
+      adId: 'ca-app-pub-3539090903954344/2163380169',
+      isTesting: false
+    };
+    await AdMob.prepareInterstitial(options);
+  } catch (err) {
+    console.error('Prepare Interstitial Error', err);
+  }
+}
+
+async function prepareRewarded() {
+  try {
+    const options = {
+      adId: 'ca-app-pub-3539090903954344/5831162433',
+      isTesting: false
+    };
+    await AdMob.prepareRewardVideoAd(options);
+  } catch (err) {
+    console.error('Prepare Rewarded Error', err);
+  }
+}
+
+async function showInterstitialAd() {
+  try {
+    await AdMob.showInterstitial();
+  } catch (err) {
+    console.error('Show Interstitial Error', err);
+  }
+}
+
+async function showRewardedAd() {
+  try {
+    await AdMob.showRewardVideoAd();
+  } catch (err) {
+    console.error('Show Rewarded Error', err);
+  }
+}
+
+function applyReviveReward() {
+  // Hide Game Over
+  document.getElementById('game-over').classList.add('hidden');
+  hasUsedRevive = true;
+
+  // Add Time if TimeAttack
+  if (currentMode === 'timeattack') {
+    timeRemaining += 15;
+    startTimer();
+  } else {
+    // Aventura doesn't have timer, just shuffle the board and keep going
+  }
+
+  // Shuffle Grid
+  shuffleBoard();
+  updateScore(0);
+}
+
+function shuffleBoard() {
+  // Extract all non-null items
+  const flatItems = [];
+  for (let r = 0; r < currentRows; r++) {
+    for (let c = 0; c < currentCols; c++) {
+      if (grid[r][c] !== null) {
+        flatItems.push(grid[r][c].color);
+        // Remove old dom elements visually for a fresh drop
+        const bol = grid[r][c];
+        if (bol.el && bol.el.parentNode) bol.el.parentNode.removeChild(bol.el);
+        grid[r][c] = null;
+      }
+    }
+  }
+
+  // Shuffle colors simple
+  flatItems.sort(() => Math.random() - 0.5);
+
+  uiGrid.innerHTML = '';
+  elementPositionMap = new WeakMap();
+
+  let index = 0;
+  for (let c = 0; c < currentCols; c++) {
+    for (let r = currentRows - 1; r >= 0; r--) {
+      if (index < flatItems.length) {
+        createBolita(r, c, flatItems[index]);
+        index++;
+      }
+    }
+  }
+
+  // Drop gravity just in case
+  applyGravity();
+  applyHorizontalShift();
+
+  if (!checkPossibleMoves()) {
+    // In lucky event it's still stuck, just reroll again
+    shuffleBoard();
+  }
+}
 
 function checkExistingSession() {
   const savedUser = localStorage.getItem('bolitasUser');
@@ -232,6 +356,10 @@ function returnToMainMenu() {
   document.getElementById('current-level-display').innerText = currentLevelIndex + 1;
   clearInterval(timerInterval);
   bgmAudio.pause();
+
+  if (currentMode === 'zen') {
+    showInterstitialAd();
+  }
 }
 
 function startGame() {
@@ -666,6 +794,15 @@ async function showGameOver(timeout = false) {
 
   document.getElementById('final-score').innerText = score;
   document.getElementById('play-again-btn').innerText = "Menu Principal";
+
+  const reviveBtn = document.getElementById('revive-btn');
+  if ((currentMode === 'timeattack' || currentMode === 'adventure') && !hasUsedRevive && score > 0) {
+    reviveBtn.classList.remove('hidden');
+    prepareRewarded(); // pre-load in background
+  } else {
+    reviveBtn.classList.add('hidden');
+  }
+
   document.getElementById('game-over').classList.remove('hidden');
 
   if (currentUser && score > 0 && currentMode === 'timeattack') {

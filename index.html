@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Bolitas</title>
+  <title>Gloop</title>
   <!-- Google Fonts for Modern Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,7 +46,7 @@
   <!-- Auth & Main Menu Screen -->
   <div id="login-screen" class="overlay">
     <div class="glass-panel" id="auth-panel">
-      <h2 class="title-logo">Bolitas</h2>
+      <h2 class="title-logo">Gloop</h2>
       <p>¿Con qué nombre quieres jugar?</p>
       <input type="text" id="username-input" class="glass-input" placeholder="Tu alias..." autocomplete="off" />
       <button id="login-btn" class="glass-btn primary">Entrar a Jugar</button>
@@ -131,6 +131,8 @@
     <div class="glass-panel">
       <h2>¡Sin movimientos!</h2>
       <p>Puntuación final: <span id="final-score">0</span></p>
+      <button id="revive-btn" class="glass-btn primary hidden"
+        style="background: var(--clr-orange); margin-bottom: 0.5rem; width: 100%;">🎥 Revivir (+15s)</button>
       <button id="play-again-btn" class="glass-btn primary">Menú Principal</button>
       <div class="overlay-footer-buttons">
         <button class="glass-btn small-btn overlay-settings-btn">⚙️</button>
@@ -199,6 +201,15 @@
         <span id="tutorial-dots"></span>
         <button id="tutorial-next-btn" class="glass-btn primary">Siguiente</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Update Required Screen -->
+  <div id="update-required-screen" class="overlay hidden" style="z-index: 9999; background: rgba(0,0,0,0.95);">
+    <div class="glass-panel" style="text-align: center; border: 2px solid var(--clr-red);">
+      <h2 style="color: var(--clr-red);">¡Actualización Necesaria!</h2>
+      <p style="margin: 20px 0;">Hay una nueva versión de Gloop disponible. Debes actualizar para seguir jugando.</p>
+      <button id="download-update-btn" class="glass-btn primary" style="width: 100%;">Descargar Actualización</button>
     </div>
   </div>
 
