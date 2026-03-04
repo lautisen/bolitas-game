@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/bolitas-game/assets/index-BphafyOT.js"></script>
-  <link rel="stylesheet" crossorigin href="/bolitas-game/assets/index-BhOQEwxq.css">
+  <script type="module" crossorigin src="/bolitas-game/assets/index-C2Jcm5dr.js"></script>
+  <link rel="stylesheet" crossorigin href="/bolitas-game/assets/index-Cw6rYv7M.css">
 </head>
 
 <body>
@@ -20,9 +20,11 @@
       <div class="header-top">
         <div class="user-info">
           <span id="current-username">Guest</span>
-          <button id="logout-btn" class="text-btn">Cambiar Usuario</button>
         </div>
-        <button id="show-leaderboard-btn" class="glass-btn small-btn">Trofeo 🏆</button>
+        <div class="header-buttons">
+          <button id="settings-btn" class="glass-btn small-btn">⚙️</button>
+          <button id="show-leaderboard-btn" class="glass-btn small-btn">🏆</button>
+        </div>
       </div>
       <div class="score-board">
         <h2>Score: <span id="score">0</span></h2>
@@ -40,14 +42,51 @@
   </div>
 
   <!-- UI Overlays -->
-  <!-- Login Screen -->
+  <!-- Auth & Main Menu Screen -->
   <div id="login-screen" class="overlay">
-    <div class="glass-panel">
+    <div class="glass-panel" id="auth-panel">
       <h2 class="title-logo">Bolitas</h2>
       <p>¿Con qué nombre querés jugar?</p>
       <input type="text" id="username-input" class="glass-input" placeholder="Tu alias..." autocomplete="off" />
       <button id="login-btn" class="glass-btn primary">Entrar a Jugar</button>
       <p class="error-msg hidden" id="login-error">Ingresa un alias para continuar</p>
+    </div>
+
+    <div class="glass-panel hidden" id="main-menu-panel">
+      <h2 class="title-logo">Modos</h2>
+      <div class="menu-buttons">
+        <button id="mode-levels-btn" class="glass-btn primary mode-btn">
+          <span>Aventura (Niveles)</span>
+          <small>Nivel <span id="current-level-display">1</span> - Misiones únicas</small>
+        </button>
+        <button id="mode-zen-btn" class="glass-btn mode-btn">
+          <span>Modo Zen</span>
+          <small>15x15 - Juega sin límite de tiempo</small>
+        </button>
+        <button id="mode-timeattack-btn" class="glass-btn mode-btn">
+          <span>Contrarreloj</span>
+          <small>20x20 - ¡Compite en el Leaderboard!</small>
+        </button>
+      </div>
+      <button id="logout-btn" class="text-btn mt-3">Cambiar Usuario</button>
+    </div>
+  </div>
+
+  <!-- Settings Screen -->
+  <div id="settings-screen" class="overlay hidden">
+    <div class="glass-panel settings-panel">
+      <h2>Ajustes ⚙️</h2>
+      <div class="settings-options">
+        <label class="setting-item">
+          <span>Música y Sonidos</span>
+          <input type="checkbox" id="audio-toggle" checked>
+        </label>
+        <label class="setting-item">
+          <span>Modo Daltónico</span>
+          <input type="checkbox" id="colorblind-toggle">
+        </label>
+      </div>
+      <button id="close-settings-btn" class="glass-btn primary mt-3">Guardar</button>
     </div>
   </div>
 
