@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Bolitas Colapsables</title>
+  <!-- Google Fonts for Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <div id="game-container">
+    <header>
+      <div class="header-top">
+        <div class="user-info">
+          <span id="current-username">Guest</span>
+          <button id="logout-btn" class="text-btn">Cambiar Usuario</button>
+        </div>
+        <button id="show-leaderboard-btn" class="glass-btn small-btn">Trofeo 🏆</button>
+      </div>
+      <div class="score-board">
+        <h2>Score: <span id="score">0</span></h2>
+        <button id="restart-btn" class="glass-btn">Restart</button>
+      </div>
+    </header>
+
+    <div class="game-area">
+      <div id="grid"></div>
+    </div>
+
+    <footer>
+      <p>Toca grupos de <strong>3 o más</strong> bolitas del mismo color para sumarlos!</p>
+    </footer>
+  </div>
+
+  <!-- UI Overlays -->
+  <!-- Login Screen -->
+  <div id="login-screen" class="overlay">
+    <div class="glass-panel">
+      <h2 class="title-logo">Bolitas</h2>
+      <p>¿Con qué nombre querés jugar?</p>
+      <input type="text" id="username-input" class="glass-input" placeholder="Tu alias..." autocomplete="off" />
+      <button id="login-btn" class="glass-btn primary">Entrar a Jugar</button>
+      <p class="error-msg hidden" id="login-error">Ingresa un alias para continuar</p>
+    </div>
+  </div>
+
+  <!-- Leaderboard Screen -->
+  <div id="leaderboard-screen" class="overlay hidden">
+    <div class="glass-panel leaderboard-panel">
+      <h2>Mejores Jugadores 🏆</h2>
+      <div class="leaderboard-list-container">
+        <ul id="leaderboard-list">
+          <li>Cargando...</li>
+        </ul>
+      </div>
+      <button id="close-leaderboard-btn" class="glass-btn primary">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div id="game-over" class="overlay hidden">
+    <div class="glass-panel">
+      <h2>Sin movimientos!</h2>
+      <p>Final Score: <span id="final-score">0</span></p>
+      <button id="play-again-btn" class="glass-btn primary">Play Again</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
