@@ -554,10 +554,11 @@ function refillBoard() {
 }
 
 function calculatePoints(count) {
-  if (count <= 3) return 10;
-  if (count === 4) return 40;
-  if (count === 5) return 100;
-  return 200;
+  if (count <= 3) return 100;
+  if (count === 4) return 250;
+  if (count === 5) return 400;
+  if (count === 6) return 750;
+  return 1000;
 }
 
 function updateScore(points) {
