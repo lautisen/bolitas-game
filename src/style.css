@@ -13,6 +13,11 @@
   --clr-purple: #8b5cf6;
 }
 
+/* Generic utility: hide any element */
+.hidden {
+  display: none !important;
+}
+
 * {
   margin: 0;
   padding: 0;

@@ -347,17 +347,18 @@ async function handleBolitaClick(startR, startC, el) {
       });
       isAnimating = false;
 
-      // Check level progression before checking for game over moves
-      if (currentMode === 'adventure') {
-        const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
-        if (score >= config.target) {
-          handleLevelComplete();
-          return;
-        }
-      }
-
       if (!checkPossibleMoves()) {
-        showGameOver(false);
+        // In adventure mode, check if the target was reached
+        if (currentMode === 'adventure') {
+          const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
+          if (score >= config.target) {
+            handleLevelComplete();
+          } else {
+            showGameOver(false);
+          }
+        } else {
+          showGameOver(false);
+        }
       }
     }, 400); // 400ms matches CSS transition
   } else {
