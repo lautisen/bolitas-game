@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 
-export default defineConfig({
-    // Setting base allows the built project to work on GitHub Pages subfolder
-    base: '/bolitas-game/',
-});
+export default defineConfig(({ mode }) => ({
+    // Use './' for Capacitor/Android native builds, '/bolitas-game/' for GitHub Pages
+    base: process.env.CAPACITOR_BUILD ? './' : '/bolitas-game/',
+}));
