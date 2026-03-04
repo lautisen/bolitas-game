@@ -9,15 +9,24 @@ bgmAudio.volume = 0.4;
 const COLS = 10;
 const ROWS = 12;
 const MIN_GROUP = 3;
-const COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink'];
+const COLORS = ['red', 'blue', 'green', 'purple', 'yellow', 'pink'];
 
 const LEVELS = [
-  { target: 200, rows: 5, cols: 5, colors: 3 },   // Nivel 1 Tutorial
-  { target: 500, rows: 7, cols: 7, colors: 4 },   // Nivel 2
-  { target: 1000, rows: 10, cols: 10, colors: 4 }, // Nivel 3
-  { target: 1500, rows: 12, cols: 10, colors: 5 }, // Nivel 4
-  { target: 2500, rows: 12, cols: 12, colors: 5 }, // Nivel 5
-  { target: 4000, rows: 14, cols: 12, colors: 6 }, // Nivel 6+
+  { target: 100, rows: 5, cols: 5, colors: 3 }, // Nivel 1
+  { target: 200, rows: 5, cols: 5, colors: 4 }, // Nivel 2
+  { target: 400, rows: 6, cols: 6, colors: 3 }, // Nivel 3
+  { target: 600, rows: 6, cols: 6, colors: 4 }, // Nivel 4
+  { target: 800, rows: 6, cols: 6, colors: 5 }, // Nivel 5
+  { target: 1000, rows: 7, cols: 7, colors: 4 }, // Nivel 6
+  { target: 1200, rows: 7, cols: 7, colors: 5 }, // Nivel 7
+  { target: 1500, rows: 7, cols: 7, colors: 6 }, // Nivel 8
+  { target: 1800, rows: 8, cols: 8, colors: 4 }, // Nivel 9
+  { target: 2200, rows: 8, cols: 8, colors: 5 }, // Nivel 10
+  { target: 2600, rows: 8, cols: 8, colors: 6 }, // Nivel 11
+  { target: 3000, rows: 9, cols: 9, colors: 5 }, // Nivel 12
+  { target: 3500, rows: 9, cols: 9, colors: 6 }, // Nivel 13
+  { target: 4000, rows: 10, cols: 10, colors: 6 }, // Nivel 14
+  { target: 5000, rows: 11, cols: 11, colors: 6 }, // Nivel 15
 ];
 
 let currentMode = 'adventure'; // 'adventure', 'zen', 'timeattack'
@@ -42,7 +51,7 @@ let comboTimeout = null;
 let isAudioEnabled = true;
 let isColorblindEnabled = false;
 let hintTimeout = null;
-const HINT_DELAY = 8000; // 8 seconds
+const HINT_DELAY = 5000; // 5 seconds
 
 // Performance: O(1) element-to-position lookup instead of O(rows*cols) scan
 const elementPositionMap = new WeakMap();
@@ -257,13 +266,13 @@ function initGame() {
     currentCols = config.cols;
     currentColors = config.colors;
   } else if (currentMode === 'zen') {
-    currentRows = 15;
-    currentCols = 15;
-    currentColors = 5;
+    currentRows = 10;
+    currentCols = 10;
+    currentColors = 6;
   } else if (currentMode === 'timeattack') {
-    currentRows = 12;
-    currentCols = 12;
-    currentColors = 6; // To keep it challenging but not impossible
+    currentRows = 8;
+    currentCols = 8;
+    currentColors = 5;
     timeRemaining = 60; // 60 seconds
     startTimer();
   }
@@ -348,20 +357,6 @@ async function handleBolitaClick(startR, startC, el) {
     selectedGroup = []; // clear selection
     const currentTime = Date.now();
 
-    // Check Combo
-    if (currentTime - lastPopTime < 2000) {
-      comboMultiplier++;
-    } else {
-      comboMultiplier = 1;
-    }
-    lastPopTime = currentTime;
-
-    // Reset combo timeout
-    clearTimeout(comboTimeout);
-    comboTimeout = setTimeout(() => {
-      comboMultiplier = 1;
-    }, 2000);
-
     // Play Pop Sound
     if (isAudioEnabled) playPopSound(groupToPop.length);
 
@@ -373,17 +368,20 @@ async function handleBolitaClick(startR, startC, el) {
 
     // Add Score
     let points = calculatePoints(groupToPop.length);
-    points = Math.floor(points * comboMultiplier);
     updateScore(points);
 
     // Spawn floating score visually at the clicked bolita
-    spawnFloatingScore(points, comboMultiplier, el);
+    spawnFloatingScore(points, 1, el);
 
     // Wait for popping animation to start before moving others
     await new Promise(res => setTimeout(res, 200));
 
     applyGravity();
-    applyHorizontalShift();
+    if (currentMode === 'zen') {
+      refillBoard();
+    } else {
+      applyHorizontalShift();
+    }
 
     // Clean up DOM elements
     setTimeout(() => {
@@ -459,15 +457,7 @@ async function handleBolitaClick(startR, startC, el) {
 function spawnFloatingScore(points, combo, targetEl) {
   const floater = document.createElement('div');
   floater.className = 'floating-score';
-
-  if (combo > 1) {
-    floater.innerHTML = `+${points}<br/><span style="font-size: 0.8em; color: var(--clr-red)">Combos x${combo}!</span>`;
-    // Add combo class for juicier animation
-    floater.classList.add('combo-text');
-    floater.classList.remove('floating-score');
-  } else {
-    floater.innerText = `+${points}`;
-  }
+  floater.innerText = `+${points}`;
 
   // Position it where the click happened roughly
   const rect = targetEl.getBoundingClientRect();
@@ -542,9 +532,32 @@ function applyHorizontalShift() {
   }
 }
 
+function refillBoard() {
+  for (let c = 0; c < currentCols; c++) {
+    for (let r = 0; r < currentRows; r++) {
+      if (grid[r][c] === null) {
+        const color = COLORS[Math.floor(Math.random() * currentColors)];
+        createBolita(r, c, color);
+
+        // Little trick to animate falling from top
+        const b = grid[r][c];
+        b.el.style.transition = 'none';
+        b.el.style.setProperty('--row', r - currentRows);
+
+        // Force reflow
+        b.el.offsetHeight;
+        b.el.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s';
+        b.el.style.setProperty('--row', r);
+      }
+    }
+  }
+}
+
 function calculatePoints(count) {
-  // Classic formula: (count - 2)^2 * 10 or similar
-  return Math.pow(count - MIN_GROUP + 1, 2) * 10;
+  if (count <= 3) return 10;
+  if (count === 4) return 40;
+  if (count === 5) return 100;
+  return 200;
 }
 
 function updateScore(points) {
