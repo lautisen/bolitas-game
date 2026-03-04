@@ -102,13 +102,17 @@ function checkExistingSession() {
   currentLevelIndex = parseInt(localStorage.getItem('bolitasLevel')) || 0;
   document.getElementById('current-level-display').innerText = currentLevelIndex + 1;
 
+  // Always make the overlay visible
+  document.getElementById('login-screen').classList.remove('hidden');
+
   if (savedUser) {
+    // Returning user: skip login form, show mode menu directly
     currentUser = savedUser;
     document.getElementById('current-username').innerText = currentUser;
     document.getElementById('auth-panel').classList.add('hidden');
     document.getElementById('main-menu-panel').classList.remove('hidden');
   } else {
-    document.getElementById('login-screen').classList.remove('hidden');
+    // New user: show login form only
     document.getElementById('auth-panel').classList.remove('hidden');
     document.getElementById('main-menu-panel').classList.add('hidden');
   }
