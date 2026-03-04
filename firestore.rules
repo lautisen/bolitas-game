@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /bolitas_leaderboard/{alias} {
+      // 1. Any person can read the entire collection
+      allow read: if true;
+      
+      // 2. Anybody can write their high score as long as:
+      allow write: if hasCorrectFields() && isScoreValid();
+      
+      // Validation helpers for clean logic
+      function hasCorrectFields() {
+      // The incoming write MUST contain exactly "score" and "timestamp"
+       return request.resource.data.keys().hasOnly(['score', 'timestamp'])
+               && request.resource.data.keys().hasAll(['score', 'timestamp']);
+      }
+      
+      function isScoreValid() {
+      // The score has to be a number (not a string, not an array)
+      // The score shouldn't be negative but we cap it at an impossibly high score
+      // to avoid memory-injected infinite numbers. 1,000,000 is a safe ceiling.
+       return request.resource.data.score is number
+              && request.resource.data.score > 0
+              && request.resource.data.score < 1000000
+              && request.resource.data.timestamp is number;
+      }
+    }
+    
+    // Explicitly lock everything else in the database
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
