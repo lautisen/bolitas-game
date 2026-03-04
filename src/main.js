@@ -2,18 +2,45 @@ import './style.css';
 import { saveScore, getLeaderboard } from './firebase.js';
 import { playSelectSound, playPopSound, playErrorSound, playGameOverSound } from './audio.js';
 
+const bgmAudio = new Audio('./assets/bgm.mp3');
+bgmAudio.loop = true;
+bgmAudio.volume = 0.4;
+
 const COLS = 10;
 const ROWS = 12;
 const MIN_GROUP = 3;
 const COLORS = ['red', 'blue', 'green', 'yellow', 'purple'];
 
-let grid = []; // 2D array [row][col], row 0 is top.
+const LEVELS = [
+  { target: 200, rows: 5, cols: 5, colors: 3 }, // Nivel 1 Tutorial
+  { target: 500, rows: 7, cols: 7, colors: 4 }, // Nivel 2
+  { target: 1000, rows: 10, cols: 10, colors: 4 }, // Nivel 3
+  { target: 1500, rows: 12, cols: 10, colors: 5 }, // Nivel 4
+  { target: 2500, rows: 15, cols: 12, colors: 6 }, // Nivel 5
+  { target: 4000, rows: 20, cols: 15, colors: 7 }, // Nivel 6+
+];
+
+let currentMode = 'adventure'; // 'adventure', 'zen', 'timeattack'
+let currentLevelIndex = 0;
+let timeRemaining = 0;
+let timerInterval = null;
+let currentRows = 10;
+let currentCols = 10;
+let currentColors = 5;
+
+let grid = [];
 let score = 0;
 let uiScore;
 let uiGrid;
 let isAnimating = false;
 let selectedGroup = [];
 let currentUser = null;
+let comboMultiplier = 1;
+let lastPopTime = 0;
+let comboTimeout = null;
+
+let isAudioEnabled = true;
+let isColorblindEnabled = false;
 
 document.addEventListener('DOMContentLoaded', () => {
   uiScore = document.getElementById('score');
@@ -21,25 +48,69 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // UI Handlers
   document.getElementById('restart-btn').addEventListener('click', initGame);
-  document.getElementById('play-again-btn').addEventListener('click', initGame);
+  document.getElementById('play-again-btn').addEventListener('click', returnToMainMenu);
   document.getElementById('login-btn').addEventListener('click', handleLogin);
   document.getElementById('logout-btn').addEventListener('click', logoutUser);
   document.getElementById('show-leaderboard-btn').addEventListener('click', showLeaderboard);
   document.getElementById('close-leaderboard-btn').addEventListener('click', hideLeaderboard);
+
+  // Settings Handlers
+  document.getElementById('settings-btn').addEventListener('click', () => {
+    document.getElementById('settings-screen').classList.remove('hidden');
+  });
+  document.getElementById('close-settings-btn').addEventListener('click', () => {
+    document.getElementById('settings-screen').classList.add('hidden');
+  });
+  document.getElementById('audio-toggle').addEventListener('change', (e) => {
+    isAudioEnabled = e.target.checked;
+    if (isAudioEnabled) {
+      if (currentMode && !document.getElementById('login-screen').classList.contains('hidden') === false) {
+        bgmAudio.play().catch(e => console.log('Autoplay prevented'));
+      }
+    } else {
+      bgmAudio.pause();
+    }
+  });
+  document.getElementById('colorblind-toggle').addEventListener('change', (e) => {
+    isColorblindEnabled = e.target.checked;
+    if (isColorblindEnabled) {
+      document.body.classList.add('color-blind-mode');
+    } else {
+      document.body.classList.remove('color-blind-mode');
+    }
+  });
+
+  // Game Mode Selection Handlers
+  document.getElementById('mode-levels-btn').addEventListener('click', () => {
+    currentMode = 'adventure';
+    startGame();
+  });
+  document.getElementById('mode-zen-btn').addEventListener('click', () => {
+    currentMode = 'zen';
+    startGame();
+  });
+  document.getElementById('mode-timeattack-btn').addEventListener('click', () => {
+    currentMode = 'timeattack';
+    startGame();
+  });
 
   checkExistingSession();
 });
 
 function checkExistingSession() {
   const savedUser = localStorage.getItem('bolitasUser');
+  currentLevelIndex = parseInt(localStorage.getItem('bolitasLevel')) || 0;
+  document.getElementById('current-level-display').innerText = currentLevelIndex + 1;
+
   if (savedUser) {
     currentUser = savedUser;
     document.getElementById('current-username').innerText = currentUser;
-    document.getElementById('login-screen').classList.add('hidden');
-    initGame();
+    document.getElementById('auth-panel').classList.add('hidden');
+    document.getElementById('main-menu-panel').classList.remove('hidden');
   } else {
-    // Show login screen
     document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('auth-panel').classList.remove('hidden');
+    document.getElementById('main-menu-panel').classList.add('hidden');
   }
 }
 
@@ -58,14 +129,19 @@ function handleLogin() {
   currentUser = alias;
   localStorage.setItem('bolitasUser', alias);
   document.getElementById('current-username').innerText = currentUser;
-  document.getElementById('login-screen').classList.add('hidden');
-  initGame();
+  document.getElementById('auth-panel').classList.add('hidden');
+  document.getElementById('main-menu-panel').classList.remove('hidden');
 }
 
 function logoutUser() {
   localStorage.removeItem('bolitasUser');
+  localStorage.removeItem('bolitasLevel');
   currentUser = null;
+  currentLevelIndex = 0;
+  document.getElementById('current-level-display').innerText = '1';
   document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('auth-panel').classList.remove('hidden');
+  document.getElementById('main-menu-panel').classList.add('hidden');
 }
 
 async function showLeaderboard() {
@@ -83,6 +159,9 @@ async function showLeaderboard() {
 
     scores.forEach((s, i) => {
       const li = document.createElement('li');
+      if (currentUser && s.username === currentUser) {
+        li.classList.add('highlight');
+      }
       li.innerHTML = `
         <span class="lb-rank">#${i + 1}</span>
         <span class="lb-name">${s.username}</span>
@@ -100,6 +179,24 @@ function hideLeaderboard() {
   document.getElementById('leaderboard-screen').classList.add('hidden');
 }
 
+function returnToMainMenu() {
+  document.getElementById('game-over').classList.add('hidden');
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('main-menu-panel').classList.remove('hidden');
+  document.getElementById('auth-panel').classList.add('hidden');
+  document.getElementById('current-level-display').innerText = currentLevelIndex + 1;
+  clearInterval(timerInterval);
+  bgmAudio.pause();
+}
+
+function startGame() {
+  document.getElementById('login-screen').classList.add('hidden');
+  if (isAudioEnabled) {
+    bgmAudio.play().catch(e => console.log('Autoplay prevented'));
+  }
+  initGame();
+}
+
 function initGame() {
   document.getElementById('game-over').classList.add('hidden');
   uiGrid.innerHTML = '';
@@ -107,12 +204,39 @@ function initGame() {
   updateScore(0);
   isAnimating = false;
   selectedGroup = [];
+  comboMultiplier = 1;
+  clearInterval(timerInterval);
 
-  grid = Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
+  // Configure grid based on mode
+  if (currentMode === 'adventure') {
+    const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
+    currentRows = config.rows;
+    currentCols = config.cols;
+    currentColors = config.colors;
+  } else if (currentMode === 'zen') {
+    currentRows = 15;
+    currentCols = 15;
+    currentColors = 5;
+  } else if (currentMode === 'timeattack') {
+    currentRows = 20;
+    currentCols = 20;
+    currentColors = 6; // To keep it challenging but not impossible
+    timeRemaining = 60; // 60 seconds
+    startTimer();
+  }
 
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  // Set CSS variables
+  document.documentElement.style.setProperty('--rows', currentRows);
+  document.documentElement.style.setProperty('--cols', currentCols);
+
+  // Set aspect ratio based on dimension
+  uiGrid.style.aspectRatio = `${currentCols} / ${currentRows}`;
+
+  grid = Array.from({ length: currentRows }, () => new Array(currentCols).fill(null));
+
+  for (let r = 0; r < currentRows; r++) {
+    for (let c = 0; c < currentCols; c++) {
+      const color = COLORS[Math.floor(Math.random() * currentColors)];
       createBolita(r, c, color);
     }
   }
@@ -121,6 +245,18 @@ function initGame() {
   if (!checkPossibleMoves()) {
     initGame(); // Reroll if totally unplayable from the start
   }
+}
+
+function startTimer() {
+  updateScore(0); // This will update the header to show time as well if needed
+  timerInterval = setInterval(() => {
+    timeRemaining--;
+    updateScore(0); // Trigger visual update
+    if (timeRemaining <= 0) {
+      clearInterval(timerInterval);
+      showGameOver(true);
+    }
+  }, 1000);
 }
 
 function createBolita(r, c, color) {
@@ -161,9 +297,24 @@ async function handleBolitaClick(startR, startC, el) {
     // Pop animation
     const groupToPop = [...selectedGroup];
     selectedGroup = []; // clear selection
+    const currentTime = Date.now();
+
+    // Check Combo
+    if (currentTime - lastPopTime < 2000) {
+      comboMultiplier++;
+    } else {
+      comboMultiplier = 1;
+    }
+    lastPopTime = currentTime;
+
+    // Reset combo timeout
+    clearTimeout(comboTimeout);
+    comboTimeout = setTimeout(() => {
+      comboMultiplier = 1;
+    }, 2000);
 
     // Play Pop Sound
-    playPopSound(groupToPop.length);
+    if (isAudioEnabled) playPopSound(groupToPop.length);
 
     groupToPop.forEach(bolita => {
       bolita.el.classList.remove('selected');
@@ -172,11 +323,12 @@ async function handleBolitaClick(startR, startC, el) {
     });
 
     // Add Score
-    const points = calculatePoints(groupToPop.length);
+    let points = calculatePoints(groupToPop.length);
+    points = Math.floor(points * comboMultiplier);
     updateScore(points);
 
     // Spawn floating score visually at the clicked bolita
-    spawnFloatingScore(points, el);
+    spawnFloatingScore(points, comboMultiplier, el);
 
     // Wait for popping animation to start before moving others
     await new Promise(res => setTimeout(res, 200));
@@ -191,8 +343,17 @@ async function handleBolitaClick(startR, startC, el) {
       });
       isAnimating = false;
 
+      // Check level progression before checking for game over moves
+      if (currentMode === 'adventure') {
+        const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
+        if (score >= config.target) {
+          handleLevelComplete();
+          return;
+        }
+      }
+
       if (!checkPossibleMoves()) {
-        showGameOver();
+        showGameOver(false);
       }
     }, 400); // 400ms matches CSS transition
   } else {
@@ -209,7 +370,7 @@ async function handleBolitaClick(startR, startC, el) {
     const visited = new Set();
 
     function dfs(currR, currC) {
-      if (currR < 0 || currR >= ROWS || currC < 0 || currC >= COLS) return;
+      if (currR < 0 || currR >= currentRows || currC < 0 || currC >= currentCols) return;
       const key = `${currR},${currC}`;
       if (visited.has(key)) return;
 
@@ -227,19 +388,27 @@ async function handleBolitaClick(startR, startC, el) {
     dfs(r, c);
 
     if (group.length >= MIN_GROUP) {
-      playSelectSound();
+      if (isAudioEnabled) playSelectSound();
       selectedGroup = group;
       selectedGroup.forEach(b => b.el.classList.add('selected'));
     } else {
-      playErrorSound();
+      if (isAudioEnabled) playErrorSound();
     }
   }
 }
 
-function spawnFloatingScore(points, targetEl) {
+function spawnFloatingScore(points, combo, targetEl) {
   const floater = document.createElement('div');
   floater.className = 'floating-score';
-  floater.innerText = `+${points}`;
+
+  if (combo > 1) {
+    floater.innerHTML = `+${points}<br/><span style="font-size: 0.8em; color: var(--clr-red)">Combos x${combo}!</span>`;
+    // Add combo class for juicier animation
+    floater.classList.add('combo-text');
+    floater.classList.remove('floating-score');
+  } else {
+    floater.innerText = `+${points}`;
+  }
 
   // Position it where the click happened roughly
   const rect = targetEl.getBoundingClientRect();
@@ -257,8 +426,8 @@ function spawnFloatingScore(points, targetEl) {
 }
 
 function findBolitaByElement(el) {
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
+  for (let r = 0; r < currentRows; r++) {
+    for (let c = 0; c < currentCols; c++) {
       if (grid[r][c] && grid[r][c].el === el) {
         return { r, c };
       }
@@ -268,10 +437,10 @@ function findBolitaByElement(el) {
 }
 
 function applyGravity() {
-  for (let c = 0; c < COLS; c++) {
-    let emptyRow = ROWS - 1;
+  for (let c = 0; c < currentCols; c++) {
+    let emptyRow = currentRows - 1;
     // Scan from bottom to top
-    for (let r = ROWS - 1; r >= 0; r--) {
+    for (let r = currentRows - 1; r >= 0; r--) {
       const item = grid[r][c];
       if (item !== null) {
         if (r !== emptyRow) {
@@ -291,10 +460,10 @@ function applyGravity() {
 function applyHorizontalShift() {
   let emptyCols = 0;
 
-  for (let c = 0; c < COLS; c++) {
+  for (let c = 0; c < currentCols; c++) {
     // Check if entire column is empty
     let isColEmpty = true;
-    for (let r = 0; r < ROWS; r++) {
+    for (let r = 0; r < currentRows; r++) {
       if (grid[r][c] !== null) {
         isColEmpty = false;
         break;
@@ -306,7 +475,7 @@ function applyHorizontalShift() {
     } else if (emptyCols > 0) {
       // Shift column to the left by emptyCols
       const newC = c - emptyCols;
-      for (let r = 0; r < ROWS; r++) {
+      for (let r = 0; r < currentRows; r++) {
         const item = grid[r][c];
         if (item !== null) {
           grid[r][newC] = item;
@@ -326,14 +495,21 @@ function calculatePoints(count) {
 
 function updateScore(points) {
   score += points;
-  uiScore.innerText = score;
+  if (currentMode === 'timeattack') {
+    uiScore.innerText = `${score} (⏱️${timeRemaining}s)`;
+  } else if (currentMode === 'adventure') {
+    const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
+    uiScore.innerText = `${score} / ${config.target}`;
+  } else {
+    uiScore.innerText = score;
+  }
 }
 
 function checkPossibleMoves() {
   const visited = new Set();
 
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
+  for (let r = 0; r < currentRows; r++) {
+    for (let c = 0; c < currentCols; c++) {
       if (!grid[r][c]) continue;
 
       const key = `${r},${c}`;
@@ -360,7 +536,7 @@ function checkPossibleMoves() {
         ];
 
         for (const n of neighbors) {
-          if (n.r >= 0 && n.r < ROWS && n.c >= 0 && n.c < COLS) {
+          if (n.r >= 0 && n.r < currentRows && n.c >= 0 && n.c < currentCols) {
             const nKey = `${n.r},${n.c}`;
             if (!localVisited.has(nKey) && grid[n.r][n.c] && grid[n.r][n.c].color === targetColor) {
               localVisited.add(nKey);
@@ -379,16 +555,40 @@ function checkPossibleMoves() {
   return false; // No moves left
 }
 
-async function showGameOver() {
-  playGameOverSound();
+async function showGameOver(timeout = false) {
+  if (isAudioEnabled) playGameOverSound();
+  clearInterval(timerInterval);
+
+  const title = document.querySelector('#game-over h2');
+  if (timeout) {
+    title.innerText = "¡Tiempo Terminado!";
+  } else {
+    title.innerText = "¡Sin movimientos!";
+  }
+
   document.getElementById('final-score').innerText = score;
+  document.getElementById('play-again-btn').innerText = "Menu Principal";
   document.getElementById('game-over').classList.remove('hidden');
 
-  if (currentUser && score > 0) {
+  if (currentUser && score > 0 && currentMode === 'timeattack') {
     try {
       await saveScore(currentUser, score);
     } catch (e) {
       console.error("Failed to save score:", e);
     }
   }
+}
+
+function handleLevelComplete() {
+  if (isAudioEnabled) playGameOverSound(); // Maybe play a success sound later
+  clearInterval(timerInterval);
+
+  currentLevelIndex++;
+  localStorage.setItem('bolitasLevel', currentLevelIndex);
+
+  const title = document.querySelector('#game-over h2');
+  title.innerText = `¡Nivel Completado!`;
+  document.getElementById('final-score').innerText = score;
+  document.getElementById('play-again-btn').innerText = "Siguiente Nivel";
+  document.getElementById('game-over').classList.remove('hidden');
 }

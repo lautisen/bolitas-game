@@ -18,6 +18,8 @@ const database = getDatabase(app);
 // Function to save or update high score
 export async function saveScore(username, score) {
     if (!username) return;
+
+    // Solo guardamos scores de TimeAttack en el leaderboard principal por ahora
     const userRef = ref(database, 'bolitas_leaderboard/' + username);
 
     // Get current score
