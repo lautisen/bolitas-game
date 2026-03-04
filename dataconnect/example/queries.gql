@@ -1,0 +1,12 @@
+query GetTopScores @auth(level: PUBLIC) {
+  leaderboardEntries(orderBy: { score: DESC }, limit: 10) {
+    id
+    score
+  }
+}
+
+query GetPlayerScore($id: String!) @auth(level: PUBLIC) {
+  leaderboardEntry(id: $id) {
+    score
+  }
+}

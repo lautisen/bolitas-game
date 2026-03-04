@@ -1,0 +1,124 @@
+extend type Mutation {
+  """
+  ✨ Insert a single `LeaderboardEntry` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  leaderboardEntry_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: LeaderboardEntry_Data!
+  ): LeaderboardEntry_KeyOutput! @fdc_generated(from: "LeaderboardEntry", purpose: INSERT_SINGLE)
+  """
+  ✨ Insert `LeaderboardEntry` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  leaderboardEntry_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [LeaderboardEntry_Data!]!
+  ): [LeaderboardEntry_KeyOutput!]! @fdc_generated(from: "LeaderboardEntry", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert or update a single `LeaderboardEntry` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `LeaderboardEntry`.
+  """
+  leaderboardEntry_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: LeaderboardEntry_Data!
+  ): LeaderboardEntry_KeyOutput! @fdc_generated(from: "LeaderboardEntry", purpose: UPSERT_SINGLE)
+  """
+  ✨ Insert or update `LeaderboardEntry` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `LeaderboardEntry`.
+  """
+  leaderboardEntry_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [LeaderboardEntry_Data!]!
+  ): [LeaderboardEntry_KeyOutput!]! @fdc_generated(from: "LeaderboardEntry", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Update a single `LeaderboardEntry` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `LeaderboardEntry` or `null` if not found.
+  """
+  leaderboardEntry_update(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: LeaderboardEntry_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: LeaderboardEntry_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: LeaderboardEntry_Data!
+  ): LeaderboardEntry_KeyOutput @fdc_generated(from: "LeaderboardEntry", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update `LeaderboardEntry` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  leaderboardEntry_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: LeaderboardEntry_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: LeaderboardEntry_Data!
+  ): Int! @fdc_generated(from: "LeaderboardEntry", purpose: UPDATE_MULTIPLE)
+  """
+  ✨ Delete a single `LeaderboardEntry` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  leaderboardEntry_delete(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: LeaderboardEntry_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: LeaderboardEntry_FirstRow
+  ): LeaderboardEntry_KeyOutput @fdc_generated(from: "LeaderboardEntry", purpose: DELETE_SINGLE)
+  """
+  ✨ Delete `LeaderboardEntry` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  leaderboardEntry_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: LeaderboardEntry_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "LeaderboardEntry", purpose: DELETE_MULTIPLE)
+}

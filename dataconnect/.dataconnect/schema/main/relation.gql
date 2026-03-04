@@ -1,0 +1,58 @@
+extend type LeaderboardEntry {
+  """
+  Implicit metadata field that cannot be written. It provides extra information about query results.
+  """
+  _metadata: _Metadata @fdc_generated(from: "LeaderboardEntry", purpose: METADATA_FIELD)
+  """
+  ✨ Count the number of rows in the `LeaderboardEntry` table.
+  """
+  _count: Int! @fdc_generated(from: "LeaderboardEntry.", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `LeaderboardEntry` table where the `id` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  id_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "LeaderboardEntry.id", purpose: QUERY_COUNT)
+  """
+  ✨ Count the number of rows in the `LeaderboardEntry` table where the `score` field is non-null. Pass the `distinct` argument to instead count the number of distinct values.
+  """
+  score_count(
+    """
+    Set to true to count the number of distinct values.
+    """
+    distinct: Boolean = false
+  ): Int! @fdc_generated(from: "LeaderboardEntry.score", purpose: QUERY_COUNT)
+  """
+  ✨ Sum the `score` field in the `LeaderboardEntry` table.
+  """
+  score_sum(
+    """
+    Set to true to sum the distinct values.
+    """
+    distinct: Boolean = false
+  ): Int @fdc_generated(from: "LeaderboardEntry.score", purpose: QUERY_SUM)
+  """
+  ✨ Average the `score` field in the `LeaderboardEntry` table.
+  """
+  score_avg(
+    """
+    Set to true to average the distinct values.
+    """
+    distinct: Boolean = false
+  ): Float @fdc_generated(from: "LeaderboardEntry.score", purpose: QUERY_AVG)
+  """
+  ✨ Minimum of the `score` field in the `LeaderboardEntry` table.
+  """
+  score_min: Int @fdc_generated(from: "LeaderboardEntry.score", purpose: QUERY_MIN)
+  """
+  ✨ Maximum of the `score` field in the `LeaderboardEntry` table.
+  """
+  score_max: Int @fdc_generated(from: "LeaderboardEntry.score", purpose: QUERY_MAX)
+  """
+  A generated field that is used for caching results in SDKs.
+  """
+  _id: ID! @fdc_generated(from: "LeaderboardEntry.id", purpose: GLOBAL_ID)
+}
