@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Bolitas Colapsables</title>
+  <title>Bolitas</title>
   <!-- Google Fonts for Modern Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,7 +17,7 @@
     <header>
       <div class="header-top">
         <div class="user-info">
-          <span id="current-username">Guest</span>
+          <span id="current-username">Invitado</span>
         </div>
         <div class="header-buttons">
           <button id="settings-btn" class="glass-btn small-btn">⚙️</button>
@@ -25,8 +25,11 @@
         </div>
       </div>
       <div class="score-board">
-        <h2>Score: <span id="score">0</span></h2>
-        <button id="restart-btn" class="glass-btn">Restart</button>
+        <h2>Puntos: <span id="score">0</span></h2>
+        <div class="header-buttons">
+          <button id="back-to-menu-btn" class="glass-btn small-btn" title="Volver al menú">🏠</button>
+          <button id="restart-btn" class="glass-btn small-btn" title="Reiniciar">🔄</button>
+        </div>
       </div>
     </header>
 
@@ -35,7 +38,7 @@
     </div>
 
     <footer>
-      <p>Toca grupos de <strong>3 o más</strong> bolitas del mismo color para sumarlos!</p>
+      <p>Toca grupos de <strong>3 o más</strong> bolitas del mismo color para eliminarlas.</p>
     </footer>
   </div>
 
@@ -44,14 +47,18 @@
   <div id="login-screen" class="overlay">
     <div class="glass-panel" id="auth-panel">
       <h2 class="title-logo">Bolitas</h2>
-      <p>¿Con qué nombre querés jugar?</p>
+      <p>¿Con qué nombre quieres jugar?</p>
       <input type="text" id="username-input" class="glass-input" placeholder="Tu alias..." autocomplete="off" />
       <button id="login-btn" class="glass-btn primary">Entrar a Jugar</button>
-      <p class="error-msg hidden" id="login-error">Ingresa un alias para continuar</p>
+      <p class="error-msg hidden" id="login-error">Introduce un alias para continuar</p>
+      <div class="overlay-footer-buttons">
+        <button class="glass-btn small-btn overlay-settings-btn">⚙️</button>
+        <button class="glass-btn small-btn overlay-leaderboard-btn">🏆</button>
+      </div>
     </div>
 
     <div class="glass-panel hidden" id="main-menu-panel">
-      <h2 class="title-logo">Modos</h2>
+      <h2 class="title-logo">Modos de Juego</h2>
       <div class="menu-buttons">
         <button id="mode-levels-btn" class="glass-btn primary mode-btn">
           <span>Aventura (Niveles)</span>
@@ -63,10 +70,16 @@
         </button>
         <button id="mode-timeattack-btn" class="glass-btn mode-btn">
           <span>Contrarreloj</span>
-          <small>20x20 - ¡Compite en el Leaderboard!</small>
+          <small>20x20 - ¡Compite en la clasificación!</small>
         </button>
       </div>
-      <button id="logout-btn" class="text-btn mt-3">Cambiar Usuario</button>
+      <div class="overlay-footer-buttons">
+        <button id="logout-btn" class="text-btn">Cambiar Usuario</button>
+        <div class="overlay-footer-icons">
+          <button class="glass-btn small-btn overlay-settings-btn">⚙️</button>
+          <button class="glass-btn small-btn overlay-leaderboard-btn">🏆</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -85,6 +98,7 @@
         </label>
       </div>
       <button id="close-settings-btn" class="glass-btn primary mt-3">Guardar</button>
+      <button id="logout-settings-btn" class="text-btn mt-3">Cerrar sesión</button>
     </div>
   </div>
 
@@ -104,9 +118,13 @@
   <!-- Game Over Screen -->
   <div id="game-over" class="overlay hidden">
     <div class="glass-panel">
-      <h2>Sin movimientos!</h2>
-      <p>Final Score: <span id="final-score">0</span></p>
-      <button id="play-again-btn" class="glass-btn primary">Play Again</button>
+      <h2>¡Sin movimientos!</h2>
+      <p>Puntuación final: <span id="final-score">0</span></p>
+      <button id="play-again-btn" class="glass-btn primary">Menú Principal</button>
+      <div class="overlay-footer-buttons">
+        <button class="glass-btn small-btn overlay-settings-btn">⚙️</button>
+        <button class="glass-btn small-btn overlay-leaderboard-btn">🏆</button>
+      </div>
     </div>
   </div>
 
