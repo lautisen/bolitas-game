@@ -1,52 +1,60 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, get, query, orderByChild, limitToLast } from 'firebase/database';
+import { getFirestore, collection, doc, setDoc, getDoc, query, orderBy, limit, getDocs } from 'firebase/firestore';
 
 // Reusing your existing Firebase project for convenience
 const firebaseConfig = {
-    apiKey: "AIzaSyBJIa7dDZ3PUWiUWRO23gXZj4peEsMmUEE",
-    authDomain: "torre-de-tartas.firebaseapp.com",
-    databaseURL: "https://torre-de-tartas-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "torre-de-tartas",
-    storageBucket: "torre-de-tartas.firebasestorage.app",
-    messagingSenderId: "119201007028",
-    appId: "1:119201007028:web:fd25b313bc58656cc15ee1"
+    apiKey: "AIzaSyCCL-H1wcRJw9QIDAWQYLNnb5daegm3VA4",
+    authDomain: "bolitas-game.firebaseapp.com",
+    databaseURL: "https://bolitas-game-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "bolitas-game",
+    storageBucket: "bolitas-game.firebasestorage.app",
+    messagingSenderId: "728484913932",
+    appId: "1:728484913932:web:ef445241159d5ad9985f29",
+    measurementId: "G-5ZKQ41JR7L"
 };
 
 const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
+const db = getFirestore(app);
 
 // Function to save or update high score
 export async function saveScore(username, score) {
     if (!username) return;
 
-    // Solo guardamos scores de TimeAttack en el leaderboard principal por ahora
-    const userRef = ref(database, 'bolitas_leaderboard/' + username);
+    try {
+        const userRef = doc(db, 'bolitas_leaderboard', username);
+        const snapshot = await getDoc(userRef);
 
-    // Get current score
-    const snapshot = await get(userRef);
-    if (snapshot.exists()) {
-        const currentScore = snapshot.val().score;
-        if (score > currentScore) {
-            await set(userRef, { score, timestamp: Date.now() });
+        if (snapshot.exists()) {
+            const currentScore = snapshot.data().score;
+            if (score > currentScore) {
+                await setDoc(userRef, { score: score, timestamp: Date.now() }, { merge: true });
+            }
+        } else {
+            await setDoc(userRef, { score: score, timestamp: Date.now() });
         }
-    } else {
-        await set(userRef, { score, timestamp: Date.now() });
+    } catch (error) {
+        console.error("Error saving score to Firestore: ", error);
     }
 }
 
 // Function to get top 10 scores
 export async function getLeaderboard() {
-    const lbRef = query(ref(database, 'bolitas_leaderboard'), orderByChild('score'), limitToLast(10));
-    const snapshot = await get(lbRef);
+    try {
+        const lbRef = collection(db, 'bolitas_leaderboard');
+        const q = query(lbRef, orderBy('score', 'desc'), limit(10));
+        const querySnapshot = await getDocs(q);
 
-    const scores = [];
-    snapshot.forEach(childSnapshot => {
-        scores.push({
-            username: childSnapshot.key,
-            score: childSnapshot.val().score
+        const scores = [];
+        querySnapshot.forEach((doc) => {
+            scores.push({
+                username: doc.id,
+                score: doc.data().score
+            });
         });
-    });
 
-    // orderByChild orders ascending, so we reverse it
-    return scores.reverse();
+        return scores;
+    } catch (error) {
+        console.error("Error getting leaderboard from Firestore: ", error);
+        return [];
+    }
 }
