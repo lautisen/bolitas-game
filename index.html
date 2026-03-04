@@ -138,6 +138,69 @@
       </div>
     </div>
   </div>
+  <!-- Tutorial Overlay -->
+  <div id="tutorial-screen" class="overlay hidden">
+    <div class="glass-panel tutorial-panel">
+      <div class="tutorial-step" data-step="1">
+        <h2>👆 Paso 1: Selecciona</h2>
+        <div class="tutorial-demo">
+          <div class="tutorial-grid">
+            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-red)"></div>
+            <div class="tutorial-ball highlighted" style="background:var(--clr-green)"></div>
+            <div class="tutorial-ball highlighted" style="background:var(--clr-green)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
+            <div class="tutorial-ball highlighted" style="background:var(--clr-green)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-yellow)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-red)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
+          </div>
+        </div>
+        <p>Toca un grupo de <strong>3 o más</strong> bolitas del mismo color para seleccionarlas.</p>
+      </div>
+
+      <div class="tutorial-step hidden" data-step="2">
+        <h2>👆👆 Paso 2: Elimina</h2>
+        <div class="tutorial-demo">
+          <div class="tutorial-grid">
+            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-red)"></div>
+            <div class="tutorial-ball selected-demo" style="background:var(--clr-green)"></div>
+            <div class="tutorial-ball selected-demo" style="background:var(--clr-green)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
+            <div class="tutorial-ball selected-demo" style="background:var(--clr-green)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-yellow)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-red)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
+          </div>
+        </div>
+        <p>Toca <strong>de nuevo</strong> el grupo seleccionado para eliminarlo y sumar puntos.</p>
+      </div>
+
+      <div class="tutorial-step hidden" data-step="3">
+        <h2>⬇️ Paso 3: Gravedad</h2>
+        <div class="tutorial-demo">
+          <div class="tutorial-grid">
+            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-red)"></div>
+            <div class="tutorial-ball empty-demo"></div>
+            <div class="tutorial-ball empty-demo"></div>
+            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
+            <div class="tutorial-ball empty-demo"></div>
+            <div class="tutorial-ball falling-demo" style="background:var(--clr-yellow)"></div>
+            <div class="tutorial-ball falling-demo" style="background:var(--clr-red)"></div>
+            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
+          </div>
+        </div>
+        <p>Las bolitas caen por gravedad para rellenar los huecos. ¡Encadena combos para más puntos!</p>
+      </div>
+
+      <div class="tutorial-nav">
+        <span id="tutorial-dots"></span>
+        <button id="tutorial-next-btn" class="glass-btn primary">Siguiente</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="/src/main.js"></script>
 </body>
