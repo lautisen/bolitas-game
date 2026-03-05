@@ -13,6 +13,7 @@ const ROWS = 12;
 const MIN_GROUP = 3;
 // Colors ordered by visual distinctiveness — levels using fewer colors get the first N entries
 const COLORS = ['red', 'blue', 'green', 'cyan', 'yellow', 'pink'];
+const ZEN_COLORS = ['red', 'green', 'purple', 'yellow']; // Fixed Zen palette
 
 const LEVELS = [
   { target: 100, rows: 5, cols: 5, colors: 3 }, // Nivel 1
@@ -39,6 +40,7 @@ let timerInterval = null;
 let currentRows = 10;
 let currentCols = 10;
 let currentColors = 5;
+let currentColorSet = COLORS; // which palette to use
 
 let grid = [];
 let score = 0;
@@ -401,10 +403,12 @@ function initGame() {
   } else if (currentMode === 'zen') {
     currentRows = 10;
     currentCols = 10;
-    currentColors = 4; // Zen: relaxed palette, easy to distinguish
+    currentColorSet = ZEN_COLORS;
+    currentColors = ZEN_COLORS.length;
   } else if (currentMode === 'timeattack') {
     currentRows = 8;
     currentCols = 8;
+    currentColorSet = COLORS;
     currentColors = 5; // Time Attack: more colors for challenge
     timeRemaining = 60; // 60 seconds
     startTimer();
@@ -421,7 +425,7 @@ function initGame() {
 
   for (let r = 0; r < currentRows; r++) {
     for (let c = 0; c < currentCols; c++) {
-      const color = COLORS[Math.floor(Math.random() * currentColors)];
+      const color = currentColorSet[Math.floor(Math.random() * currentColors)];
       createBolita(r, c, color);
     }
   }
