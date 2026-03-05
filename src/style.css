@@ -10,7 +10,7 @@
   --clr-blue: #3b82f6;
   --clr-green: #10b981;
   --clr-yellow: #f59e0b;
-  --clr-purple: #8b5cf6;
+  --clr-cyan: #06b6d4;
   --clr-orange: #f97316;
   --clr-pink: #ec4899;
 }
@@ -209,8 +209,8 @@ header {
   background: var(--clr-yellow);
 }
 
-.bolita[data-color="purple"] {
-  background: var(--clr-purple);
+.bolita[data-color="cyan"] {
+  background: var(--clr-cyan);
 }
 
 .bolita[data-color="orange"] {
