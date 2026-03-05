@@ -13,7 +13,7 @@ const ROWS = 12;
 const MIN_GROUP = 3;
 // Colors ordered by visual distinctiveness — levels using fewer colors get the first N entries
 const COLORS = ['red', 'blue', 'green', 'cyan', 'yellow', 'pink'];
-const ZEN_COLORS = ['red', 'green', 'purple', 'yellow']; // Fixed Zen palette
+const ZEN_COLORS = ['red', 'green', 'purple', 'yellow', 'cyan']; // Fixed Zen palette
 
 const LEVELS = [
   { target: 100, rows: 5, cols: 5, colors: 3 }, // Nivel 1
