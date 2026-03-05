@@ -21,14 +21,14 @@ const LEVELS = [
   { target: 800, rows: 6, cols: 6, colors: 5 }, // Nivel 5
   { target: 1000, rows: 7, cols: 7, colors: 4 }, // Nivel 6
   { target: 1200, rows: 7, cols: 7, colors: 5 }, // Nivel 7
-  { target: 1500, rows: 7, cols: 7, colors: 6 }, // Nivel 8
-  { target: 1800, rows: 8, cols: 8, colors: 4 }, // Nivel 9
-  { target: 2200, rows: 8, cols: 8, colors: 5 }, // Nivel 10
-  { target: 2600, rows: 8, cols: 8, colors: 6 }, // Nivel 11
-  { target: 3000, rows: 9, cols: 9, colors: 5 }, // Nivel 12
-  { target: 3500, rows: 9, cols: 9, colors: 6 }, // Nivel 13
-  { target: 4000, rows: 10, cols: 10, colors: 6 }, // Nivel 14
-  { target: 5000, rows: 11, cols: 11, colors: 6 }, // Nivel 15
+  { target: 1500, rows: 8, cols: 8, colors: 4 }, // Nivel 8
+  { target: 1800, rows: 8, cols: 8, colors: 5 }, // Nivel 9
+  { target: 2200, rows: 9, cols: 9, colors: 4 }, // Nivel 10
+  { target: 2600, rows: 9, cols: 9, colors: 5 }, // Nivel 11
+  { target: 3100, rows: 10, cols: 10, colors: 4 }, // Nivel 12
+  { target: 3700, rows: 10, cols: 10, colors: 5 }, // Nivel 13
+  { target: 4400, rows: 11, cols: 11, colors: 5 }, // Nivel 14
+  { target: 5200, rows: 11, cols: 11, colors: 6 }, // Nivel 15+
 ];
 
 let currentMode = 'adventure'; // 'adventure', 'zen', 'timeattack'
@@ -166,8 +166,10 @@ async function initAdMob() {
 async function prepareInterstitial() {
   try {
     const options = {
-      adId: 'ca-app-pub-3539090903954344/2163380169',
-      isTesting: false
+      // Test interstitial ID - swap for real ID when app is live:
+      // ca-app-pub-3539090903954344/2163380169
+      adId: 'ca-app-pub-3940256099942544/1033173712',
+      isTesting: true
     };
     await AdMob.prepareInterstitial(options);
   } catch (err) {
@@ -178,8 +180,10 @@ async function prepareInterstitial() {
 async function prepareRewarded() {
   try {
     const options = {
-      adId: 'ca-app-pub-3539090903954344/5831162433',
-      isTesting: false
+      // Test rewarded ID - swap for real ID when app is live:
+      // ca-app-pub-3539090903954344/5831162433
+      adId: 'ca-app-pub-3940256099942544/5224354917',
+      isTesting: true
     };
     await AdMob.prepareRewardVideoAd(options);
   } catch (err) {
@@ -421,9 +425,9 @@ function initGame() {
     }
   }
 
-  // Ensure there's at least one move to start with
-  if (!checkPossibleMoves()) {
-    initGame(); // Reroll if totally unplayable from the start
+  // Ensure at least 3 valid groups are available at start
+  if (countValidGroups() < 3) {
+    initGame(); // Reroll until board is playable enough
   } else {
     resetHintTimer();
   }
@@ -706,6 +710,58 @@ function checkPossibleMoves() {
 }
 
 // Returns the first valid group found, or null if none
+// Count how many valid groups exist on the board
+function countValidGroups() {
+  const visited = new Set();
+  let count = 0;
+
+  for (let r = 0; r < currentRows; r++) {
+    for (let c = 0; c < currentCols; c++) {
+      if (!grid[r][c]) continue;
+
+      const key = `${r},${c}`;
+      if (visited.has(key)) continue;
+
+      const targetColor = grid[r][c].color;
+      const groupSize = [];
+
+      const queue = [{ r, c }];
+      const localVisited = new Set();
+      localVisited.add(key);
+
+      while (queue.length > 0) {
+        const curr = queue.shift();
+        groupSize.push(curr);
+        visited.add(`${curr.r},${curr.c}`);
+
+        const neighbors = [
+          { r: curr.r + 1, c: curr.c },
+          { r: curr.r - 1, c: curr.c },
+          { r: curr.r, c: curr.c + 1 },
+          { r: curr.r, c: curr.c - 1 }
+        ];
+
+        for (const n of neighbors) {
+          if (n.r >= 0 && n.r < currentRows && n.c >= 0 && n.c < currentCols) {
+            const nKey = `${n.r},${n.c}`;
+            if (!localVisited.has(nKey) && grid[n.r][n.c] && grid[n.r][n.c].color === targetColor) {
+              localVisited.add(nKey);
+              queue.push(n);
+            }
+          }
+        }
+      }
+
+      if (groupSize.length >= MIN_GROUP) {
+        count++;
+        if (count >= 3) return count; // Early exit once we have enough
+      }
+    }
+  }
+
+  return count;
+}
+
 function findValidGroup() {
   const visited = new Set();
 
