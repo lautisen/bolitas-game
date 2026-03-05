@@ -181,10 +181,8 @@ async function prepareInterstitial() {
 async function prepareRewarded() {
   try {
     const options = {
-      // Test rewarded ID - swap for real ID when app is live:
-      // ca-app-pub-3539090903954344/5831162433
-      adId: 'ca-app-pub-3940256099942544/5224354917',
-      isTesting: true
+      adId: 'ca-app-pub-3539090903954344/5831162433',
+      isTesting: false
     };
     await AdMob.prepareRewardVideoAd(options);
   } catch (err) {
