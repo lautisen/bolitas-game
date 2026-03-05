@@ -162,11 +162,13 @@ async function initAdMob() {
     await AdMob.initialize({});
     console.log('AdMob initialized');
 
-    // Listeners for Rewarded Ad
-    AdMob.addListener('onRewardedVideoAdRewarded', (rewardItem) => {
+    // Rewarded ad listeners — both event names for compatibility
+    const onRewarded = (rewardItem) => {
       console.log('User was rewarded', rewardItem);
       applyReviveReward();
-    });
+    };
+    AdMob.addListener('onRewardedVideoAdRewarded', onRewarded);
+    AdMob.addListener('adRewarded', onRewarded);
 
   } catch (err) {
     console.error('AdMob initialization failed', err);
@@ -240,15 +242,16 @@ function applyReviveReward() {
   document.getElementById('game-over').classList.add('hidden');
   hasUsedRevive = true;
 
+  // Re-show banner (it may have been dismissed during ad playback)
+  showBannerAd();
+
   // Add Time if TimeAttack
   if (currentMode === 'timeattack') {
     timeRemaining += 15;
-    startTimer();
-  } else {
-    // Aventura doesn't have timer, just shuffle the board and keep going
+    startTimer(); // startTimer now clears old interval first
   }
 
-  // Shuffle Grid
+  // Shuffle Grid so player has new moves
   shuffleBoard();
   updateScore(0);
 }
@@ -406,12 +409,12 @@ function startGame() {
   if (isAudioEnabled) {
     bgmAudio.play().catch(e => console.log('Autoplay prevented'));
   }
-  showBannerAd();
   initGame();
 }
 
 function initGame() {
   document.getElementById('game-over').classList.add('hidden');
+  showBannerAd();
   uiGrid.innerHTML = '';
   score = 0;
   updateScore(0);
@@ -466,10 +469,11 @@ function initGame() {
 }
 
 function startTimer() {
-  updateScore(0); // This will update the header to show time as well if needed
+  clearInterval(timerInterval); // prevent duplicate timers
+  updateScore(0);
   timerInterval = setInterval(() => {
     timeRemaining--;
-    updateScore(0); // Trigger visual update
+    updateScore(0);
     if (timeRemaining <= 0) {
       clearInterval(timerInterval);
       showGameOver(true);
@@ -902,6 +906,12 @@ async function showGameOver(timeout = false) {
   }
 
   document.getElementById('game-over').classList.remove('hidden');
+
+  // Show interstitial immediately for modes that don't have a rewarded button flow
+  // (Zen never has the revive btn, so show interstitial now)
+  if (currentMode === 'zen') {
+    prepareInterstitial().then(() => showInterstitialAd());
+  }
 
   if (currentUser && score > 0 && currentMode === 'timeattack') {
     try {
