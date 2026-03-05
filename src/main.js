@@ -213,7 +213,7 @@ async function showRewardedAd() {
 async function showBannerAd() {
   try {
     await AdMob.showBanner({
-      adId: 'ca-app-pub-3539090903954344/5680093248',
+      adId: 'ca-app-pub-3539090903954344/8982185366',
       adSize: BannerAdSize.ADAPTIVE_BANNER,
       position: BannerAdPosition.BOTTOM_CENTER,
       margin: 0,
