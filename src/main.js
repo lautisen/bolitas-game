@@ -2,7 +2,7 @@ import './style.css';
 import { saveScore, getLeaderboard } from './firebase.js';
 import { playSelectSound, playPopSound, playErrorSound, playGameOverSound } from './audio.js';
 import { checkAppVersion } from './versionCheck.js';
-import { AdMob, BannerAdSize, BannerAdPosition, BannerAdPluginEvents } from '@capacitor-community/admob';
+import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 
 const bgmAudio = new Audio('./assets/bgm.mp3');
 bgmAudio.loop = true;
@@ -210,6 +210,28 @@ async function showRewardedAd() {
   }
 }
 
+async function showBannerAd() {
+  try {
+    await AdMob.showBanner({
+      adId: 'ca-app-pub-3539090903954344/5680093248',
+      adSize: BannerAdSize.ADAPTIVE_BANNER,
+      position: BannerAdPosition.BOTTOM_CENTER,
+      margin: 0,
+      isTesting: false,
+    });
+  } catch (err) {
+    console.warn('Banner ad error:', err);
+  }
+}
+
+async function hideBannerAd() {
+  try {
+    await AdMob.hideBanner();
+  } catch (err) {
+    // Ignore if no banner active
+  }
+}
+
 function applyReviveReward() {
   // Hide Game Over
   document.getElementById('game-over').classList.add('hidden');
@@ -363,6 +385,7 @@ function returnToMainMenu() {
   document.getElementById('current-level-display').innerText = currentLevelIndex + 1;
   clearInterval(timerInterval);
   bgmAudio.pause();
+  hideBannerAd();
 
   if (currentMode === 'zen') {
     showInterstitialAd();
@@ -380,6 +403,7 @@ function startGame() {
   if (isAudioEnabled) {
     bgmAudio.play().catch(e => console.log('Autoplay prevented'));
   }
+  showBannerAd();
   initGame();
 }
 
