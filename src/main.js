@@ -169,10 +169,8 @@ async function initAdMob() {
 async function prepareInterstitial() {
   try {
     const options = {
-      // Test interstitial ID - swap for real ID when app is live:
-      // ca-app-pub-3539090903954344/2163380169
-      adId: 'ca-app-pub-3940256099942544/1033173712',
-      isTesting: true
+      adId: 'ca-app-pub-3539090903954344/2163380169',
+      isTesting: false
     };
     await AdMob.prepareInterstitial(options);
   } catch (err) {
