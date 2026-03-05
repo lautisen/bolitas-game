@@ -11,7 +11,8 @@ bgmAudio.volume = 0.4;
 const COLS = 10;
 const ROWS = 12;
 const MIN_GROUP = 3;
-const COLORS = ['red', 'blue', 'green', 'purple', 'yellow', 'pink'];
+// Colors ordered by visual distinctiveness — levels using fewer colors get the first N entries
+const COLORS = ['red', 'blue', 'green', 'cyan', 'yellow', 'pink'];
 
 const LEVELS = [
   { target: 100, rows: 5, cols: 5, colors: 3 }, // Nivel 1
@@ -400,11 +401,11 @@ function initGame() {
   } else if (currentMode === 'zen') {
     currentRows = 10;
     currentCols = 10;
-    currentColors = 6;
+    currentColors = 4; // Zen: relaxed palette, easy to distinguish
   } else if (currentMode === 'timeattack') {
     currentRows = 8;
     currentCols = 8;
-    currentColors = 5;
+    currentColors = 5; // Time Attack: more colors for challenge
     timeRemaining = 60; // 60 seconds
     startTimer();
   }
