@@ -73,7 +73,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // UI Handlers
   document.getElementById('restart-btn').addEventListener('click', initGame);
-  document.getElementById('play-again-btn').addEventListener('click', returnToMainMenu);
+  document.getElementById('play-again-btn').addEventListener('click', () => {
+    const btn = document.getElementById('play-again-btn');
+    if (btn.dataset.action === 'retry') {
+      initGame();
+    } else {
+      returnToMainMenu();
+    }
+  });
   document.getElementById('login-btn').addEventListener('click', handleLogin);
   document.getElementById('logout-btn').addEventListener('click', logoutUser);
   document.getElementById('back-to-menu-btn').addEventListener('click', returnToMainMenu);
@@ -514,8 +521,12 @@ async function handleBolitaClick(startR, startC, el) {
     selectedGroup = []; // clear selection
     const currentTime = Date.now();
 
-    // Play Pop Sound
+    // Play Pop Sound + Haptic feedback on mobile
     if (isAudioEnabled) playPopSound(groupToPop.length);
+    if (navigator.vibrate) {
+      navigator.vibrate(groupToPop.length >= 8 ? 60 : 30);
+    }
+
 
     groupToPop.forEach(bolita => {
       bolita.el.classList.remove('selected');
@@ -874,7 +885,13 @@ async function showGameOver(timeout = false) {
   }
 
   document.getElementById('final-score').innerText = score;
-  document.getElementById('play-again-btn').innerText = "Menu Principal";
+  if (currentMode === 'adventure' && !timeout) {
+    document.getElementById('play-again-btn').innerText = "Reintentar";
+    document.getElementById('play-again-btn').dataset.action = 'retry';
+  } else {
+    document.getElementById('play-again-btn').innerText = "Menú Principal";
+    document.getElementById('play-again-btn').dataset.action = 'menu';
+  }
 
   const reviveBtn = document.getElementById('revive-btn');
   if ((currentMode === 'timeattack' || currentMode === 'adventure') && !hasUsedRevive && score > 0) {
