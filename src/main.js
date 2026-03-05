@@ -162,16 +162,16 @@ async function initAdMob() {
     await AdMob.initialize({});
     console.log('AdMob initialized');
 
-    // Rewarded ad listeners (v8 event names)
+    // Rewarded ad listeners (v8 event names from source)
     const onRewarded = (rewardItem) => {
       console.log('User was rewarded', rewardItem);
       applyReviveReward();
     };
-    AdMob.addListener('rewardedVideoAdRewarded', onRewarded);
+    AdMob.addListener('onRewardedVideoAdReward', onRewarded);
 
     // Also listen for ad dismissal to ensure we unpause/restore UI
     // just in case the reward event fires before dismissal completes
-    AdMob.addListener('rewardedVideoAdDismissed', () => {
+    AdMob.addListener('onRewardedVideoAdDismissed', () => {
       console.log('Rewarded Video Dismissed');
       // If the user closed the ad before reward, applyReviveReward wasn't called.
       // We don't want to penalize, but we must make sure the banner comes back
