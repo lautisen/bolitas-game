@@ -245,15 +245,10 @@ function applyReviveReward() {
   // Re-show banner (it may have been dismissed during ad playback)
   showBannerAd();
 
-  // Add Time if TimeAttack
-  if (currentMode === 'timeattack') {
-    timeRemaining += 15;
-    startTimer(); // startTimer now clears old interval first
-  }
-
-  // Shuffle Grid so player has new moves
-  shuffleBoard();
-  updateScore(0);
+  // Call initGame with isRevive = true
+  // This will completely refill the board to guarantee new moves
+  // while keeping the score and level intact, and adding 15s if Time Attack.
+  initGame(true);
 }
 
 function shuffleBoard() {
@@ -412,15 +407,19 @@ function startGame() {
   initGame();
 }
 
-function initGame() {
+function initGame(isRevive = false) {
   document.getElementById('game-over').classList.add('hidden');
   showBannerAd();
   uiGrid.innerHTML = '';
-  score = 0;
+
+  if (!isRevive) {
+    score = 0;
+    comboMultiplier = 1;
+  }
+
   updateScore(0);
   isAnimating = false;
   selectedGroup = [];
-  comboMultiplier = 1;
   hintedElements = [];
   clearInterval(timerInterval);
 
@@ -430,6 +429,7 @@ function initGame() {
     currentRows = config.rows;
     currentCols = config.cols;
     currentColors = config.colors;
+    currentColorSet = COLORS;
   } else if (currentMode === 'zen') {
     currentRows = 10;
     currentCols = 10;
@@ -440,7 +440,7 @@ function initGame() {
     currentCols = 8;
     currentColorSet = COLORS;
     currentColors = 5; // Time Attack: more colors for challenge
-    timeRemaining = 60; // 60 seconds
+    timeRemaining = isRevive ? 15 : 60;
     startTimer();
   }
 
@@ -462,7 +462,7 @@ function initGame() {
 
   // Ensure at least 3 valid groups are available at start
   if (countValidGroups() < 3) {
-    initGame(); // Reroll until board is playable enough
+    initGame(isRevive); // Reroll until board is playable enough
   } else {
     resetHintTimer();
   }
