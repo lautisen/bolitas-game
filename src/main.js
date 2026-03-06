@@ -58,6 +58,7 @@ let isColorblindEnabled = false;
 let hintTimeout = null;
 const HINT_DELAY = 5000; // 5 seconds
 let hasUsedRevive = false;
+let isBannerCreated = false;
 
 // Performance: O(1) element-to-position lookup instead of O(rows*cols) scan
 const elementPositionMap = new WeakMap();
@@ -72,10 +73,10 @@ document.addEventListener('DOMContentLoaded', () => {
   checkAppVersion();
 
   // UI Handlers
-  document.getElementById('restart-btn').addEventListener('click', initGame);
+  document.getElementById('restart-btn').addEventListener('click', () => initGame());
   document.getElementById('play-again-btn').addEventListener('click', () => {
     const btn = document.getElementById('play-again-btn');
-    if (btn.dataset.action === 'retry') {
+    if (btn.dataset.action === 'retry' || btn.dataset.action === 'next') {
       initGame();
     } else {
       returnToMainMenu();
@@ -237,13 +238,18 @@ async function showRewardedAd() {
 
 async function showBannerAd() {
   try {
-    await AdMob.showBanner({
-      adId: 'ca-app-pub-3539090903954344/8982185366',
-      adSize: BannerAdSize.ADAPTIVE_BANNER,
-      position: BannerAdPosition.BOTTOM_CENTER,
-      margin: 0,
-      isTesting: false,
-    });
+    if (!isBannerCreated) {
+      await AdMob.showBanner({
+        adId: 'ca-app-pub-3539090903954344/8982185366',
+        adSize: BannerAdSize.ADAPTIVE_BANNER,
+        position: BannerAdPosition.BOTTOM_CENTER,
+        margin: 0,
+        isTesting: false,
+      });
+      isBannerCreated = true;
+    } else {
+      await AdMob.resumeBanner();
+    }
   } catch (err) {
     console.warn('Banner ad error:', err);
   }
@@ -958,6 +964,7 @@ function handleLevelComplete() {
   title.innerText = `¡Nivel Completado!`;
   document.getElementById('final-score').innerText = score;
   document.getElementById('play-again-btn').innerText = "Siguiente Nivel";
+  document.getElementById('play-again-btn').dataset.action = 'next';
   document.getElementById('revive-btn').classList.add('hidden');
   document.getElementById('game-over').classList.remove('hidden');
 }
