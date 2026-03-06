@@ -217,6 +217,14 @@ async function showInterstitialAd() {
 
 async function showRewardedAd() {
   try {
+    // Ensure the ad is prepared right before showing it.
+    // Calling prepare again if already prepared is safe and handles 
+    // the case where the background prepare from showGameOver didn't finish in time.
+    const options = {
+      adId: 'ca-app-pub-3539090903954344/5831162433',
+      isTesting: false
+    };
+    await AdMob.prepareRewardVideoAd(options);
     await AdMob.showRewardVideoAd();
   } catch (err) {
     console.error('Show Rewarded Error', err);
