@@ -423,6 +423,7 @@ function initGame(isRevive = false) {
   if (!isRevive) {
     score = 0;
     comboMultiplier = 1;
+    hasUsedRevive = false;
   }
 
   updateScore(0);
