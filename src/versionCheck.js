@@ -52,7 +52,7 @@ function showUpdateScreen() {
     const downloadBtn = document.getElementById('download-update-btn');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', () => {
-            // Placeholder link - Replace with actual Play Store URL
+            // Open the app's Play Store page
             window.open('market://details?id=com.dreaminraw.bolitas', '_system');
         });
     }
