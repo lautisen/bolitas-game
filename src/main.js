@@ -958,6 +958,7 @@ function handleLevelComplete() {
   title.innerText = `¡Nivel Completado!`;
   document.getElementById('final-score').innerText = score;
   document.getElementById('play-again-btn').innerText = "Siguiente Nivel";
+  document.getElementById('revive-btn').classList.add('hidden');
   document.getElementById('game-over').classList.remove('hidden');
 }
 
