@@ -81,6 +81,10 @@ document.addEventListener('DOMContentLoaded', () => {
       returnToMainMenu();
     }
   });
+  document.getElementById('reward-continue-btn').addEventListener('click', () => {
+    document.getElementById('reward-ready-screen').classList.add('hidden');
+    initGame(true);
+  });
   document.getElementById('login-btn').addEventListener('click', handleLogin);
   document.getElementById('logout-btn').addEventListener('click', logoutUser);
   document.getElementById('back-to-menu-btn').addEventListener('click', returnToMainMenu);
@@ -261,10 +265,14 @@ function applyReviveReward() {
   // Re-show banner (it may have been dismissed during ad playback)
   showBannerAd();
 
-  // Call initGame with isRevive = true
-  // This will completely refill the board to guarantee new moves
-  // while keeping the score and level intact, and adding 15s if Time Attack.
-  initGame(true);
+  // Show confirmation screen before resuming timer
+  const textEl = document.getElementById('reward-ready-text');
+  if (currentMode === 'timeattack') {
+    textEl.innerHTML = "El tablero se ha rellenado.<br>¡Tienes 15 segundos extra!";
+  } else {
+    textEl.innerHTML = "El tablero se ha rellenado.<br>¡Sigue jugando!";
+  }
+  document.getElementById('reward-ready-screen').classList.remove('hidden');
 }
 
 function shuffleBoard() {
