@@ -112,6 +112,33 @@ header {
   color: var(--clr-yellow);
 }
 
+/* Pass Level Button */
+.pass-level-btn {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  font-size: 1rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--clr-green), #06d6a0);
+  border: none;
+  color: #fff;
+  border-radius: 10px;
+  cursor: pointer;
+  animation: passLevelGlow 1.5s infinite alternate ease-in-out;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes passLevelGlow {
+  0% {
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4), 0 0 20px rgba(16, 185, 129, 0.2);
+    filter: brightness(1);
+  }
+
+  100% {
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.7), 0 0 40px rgba(16, 185, 129, 0.4), 0 0 60px rgba(245, 158, 11, 0.2);
+    filter: brightness(1.15);
+  }
+}
+
 .glass-btn {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
