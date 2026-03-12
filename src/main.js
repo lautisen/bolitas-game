@@ -15,23 +15,26 @@ const MIN_GROUP = 3;
 const COLORS = ['red', 'blue', 'green', 'cyan', 'yellow', 'pink'];
 const ZEN_COLORS = ['red', 'green', 'purple', 'yellow', 'cyan']; // Fixed Zen palette
 
-const LEVELS = [
-  { target: 100, rows: 5, cols: 5, colors: 3 }, // Nivel 1
-  { target: 200, rows: 5, cols: 5, colors: 4 }, // Nivel 2
-  { target: 400, rows: 6, cols: 6, colors: 3 }, // Nivel 3
-  { target: 600, rows: 6, cols: 6, colors: 4 }, // Nivel 4
-  { target: 800, rows: 6, cols: 6, colors: 5 }, // Nivel 5
-  { target: 1000, rows: 7, cols: 7, colors: 4 }, // Nivel 6
-  { target: 1200, rows: 7, cols: 7, colors: 5 }, // Nivel 7
-  { target: 1500, rows: 8, cols: 8, colors: 4 }, // Nivel 8
-  { target: 1800, rows: 8, cols: 8, colors: 5 }, // Nivel 9
-  { target: 2200, rows: 9, cols: 9, colors: 4 }, // Nivel 10
-  { target: 2600, rows: 9, cols: 9, colors: 5 }, // Nivel 11
-  { target: 3100, rows: 10, cols: 10, colors: 4 }, // Nivel 12
-  { target: 3700, rows: 10, cols: 10, colors: 5 }, // Nivel 13
-  { target: 4400, rows: 11, cols: 11, colors: 5 }, // Nivel 14
-  { target: 5200, rows: 11, cols: 11, colors: 6 }, // Nivel 15+
-];
+// Generate 100 levels with gradual difficulty curve
+function generateLevels() {
+  const levels = [];
+  for (let i = 0; i < 100; i++) {
+    const level = i + 1;
+    // Rows/Cols: start at 5x5, grow gradually to 12x12
+    const size = Math.min(12, 5 + Math.floor(i / 8));
+    // Colors: start at 3, increase slowly
+    let colors;
+    if (level <= 5) colors = 3;
+    else if (level <= 15) colors = 4;
+    else if (level <= 35) colors = 5;
+    else colors = 6;
+    // Target score: gradual curve
+    const target = Math.round(80 + (i * 60) + (i * i * 1.5));
+    levels.push({ target, rows: size, cols: size, colors });
+  }
+  return levels;
+}
+const LEVELS = generateLevels();
 
 let currentMode = 'adventure'; // 'adventure', 'zen', 'timeattack'
 let currentLevelIndex = 0;
@@ -59,6 +62,8 @@ let hintTimeout = null;
 const HINT_DELAY = 5000; // 5 seconds
 let hasUsedRevive = false;
 let isBannerCreated = false;
+let isAdLoading = false;
+let levelCompleted = false;
 
 // Performance: O(1) element-to-position lookup instead of O(rows*cols) scan
 const elementPositionMap = new WeakMap();
@@ -148,10 +153,18 @@ document.addEventListener('DOMContentLoaded', () => {
     startGame();
   });
   document.getElementById('mode-zen-btn').addEventListener('click', () => {
+    if (currentLevelIndex < 49) {
+      alert(`El Modo Zen se desbloquea en el Nivel 50. Estás en el Nivel ${currentLevelIndex + 1}.`);
+      return;
+    }
     currentMode = 'zen';
     startGame();
   });
   document.getElementById('mode-timeattack-btn').addEventListener('click', () => {
+    if (currentLevelIndex < 29) {
+      alert(`El Modo Contrarreloj se desbloquea en el Nivel 30. Estás en el Nivel ${currentLevelIndex + 1}.`);
+      return;
+    }
     currentMode = 'timeattack';
     startGame();
   });
@@ -178,10 +191,11 @@ async function initAdMob() {
     // just in case the reward event fires before dismissal completes
     AdMob.addListener('onRewardedVideoAdDismissed', () => {
       console.log('Rewarded Video Dismissed');
-      // If the user closed the ad before reward, applyReviveReward wasn't called.
-      // We don't want to penalize, but we must make sure the banner comes back
       showBannerAd();
     });
+
+    // Show banner globally as soon as initialized
+    showBannerAd();
 
   } catch (err) {
     console.error('AdMob initialization failed', err);
@@ -221,10 +235,16 @@ async function showInterstitialAd() {
 }
 
 async function showRewardedAd() {
+  if (isAdLoading) return; // Prevent multiple taps
+  isAdLoading = true;
+
+  const reviveBtn = document.getElementById('revive-btn');
+  const originalText = reviveBtn.innerText;
+  reviveBtn.innerText = '⏳ Cargando anuncio...';
+  reviveBtn.style.opacity = '0.6';
+  reviveBtn.style.pointerEvents = 'none';
+
   try {
-    // Ensure the ad is prepared right before showing it.
-    // Calling prepare again if already prepared is safe and handles 
-    // the case where the background prepare from showGameOver didn't finish in time.
     const options = {
       adId: 'ca-app-pub-3539090903954344/5831162433',
       isTesting: false
@@ -233,6 +253,11 @@ async function showRewardedAd() {
     await AdMob.showRewardVideoAd();
   } catch (err) {
     console.error('Show Rewarded Error', err);
+  } finally {
+    isAdLoading = false;
+    reviveBtn.innerText = originalText;
+    reviveBtn.style.opacity = '1';
+    reviveBtn.style.pointerEvents = 'auto';
   }
 }
 
@@ -326,6 +351,7 @@ function checkExistingSession() {
   const savedUser = localStorage.getItem('bolitasUser');
   currentLevelIndex = parseInt(localStorage.getItem('bolitasLevel')) || 0;
   document.getElementById('current-level-display').innerText = currentLevelIndex + 1;
+  updateModeButtons();
 
   // Always make the overlay visible
   document.getElementById('login-screen').classList.remove('hidden');
@@ -368,6 +394,7 @@ function logoutUser() {
   currentUser = null;
   currentLevelIndex = 0;
   document.getElementById('current-level-display').innerText = '1';
+  updateModeButtons();
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('auth-panel').classList.remove('hidden');
   document.getElementById('main-menu-panel').classList.add('hidden');
@@ -414,9 +441,9 @@ function returnToMainMenu() {
   document.getElementById('main-menu-panel').classList.remove('hidden');
   document.getElementById('auth-panel').classList.add('hidden');
   document.getElementById('current-level-display').innerText = currentLevelIndex + 1;
+  updateModeButtons();
   clearInterval(timerInterval);
   bgmAudio.pause();
-  hideBannerAd();
 
   if (currentMode === 'zen') {
     showInterstitialAd();
@@ -446,6 +473,7 @@ function initGame(isRevive = false) {
     score = 0;
     comboMultiplier = 1;
     hasUsedRevive = false;
+    levelCompleted = false;
   }
 
   updateScore(0);
@@ -461,17 +489,26 @@ function initGame(isRevive = false) {
     currentCols = config.cols;
     currentColors = config.colors;
     currentColorSet = COLORS;
+    // Update header to show level
+    document.querySelector('.score-board h2').innerHTML = `Nivel ${currentLevelIndex + 1} — <span id="score">0</span>`;
+    uiScore = document.getElementById('score');
   } else if (currentMode === 'zen') {
     currentRows = 10;
     currentCols = 10;
     currentColorSet = ZEN_COLORS;
     currentColors = ZEN_COLORS.length;
+    // Restore header for non-adventure modes
+    document.querySelector('.score-board h2').innerHTML = `Puntos: <span id="score">0</span>`;
+    uiScore = document.getElementById('score');
   } else if (currentMode === 'timeattack') {
     currentRows = 8;
     currentCols = 8;
     currentColorSet = COLORS;
     currentColors = 5; // Time Attack: more colors for challenge
     timeRemaining = isRevive ? 15 : 60;
+    // Restore header for non-adventure modes
+    document.querySelector('.score-board h2').innerHTML = `Puntos: <span id="score">0</span>`;
+    uiScore = document.getElementById('score');
     startTimer();
   }
 
@@ -603,9 +640,9 @@ async function handleBolitaClick(startR, startC, el) {
         // In adventure mode, check if the target was reached
         if (currentMode === 'adventure') {
           const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
-          if (score >= config.target) {
+          if (score >= config.target && !levelCompleted) {
             handleLevelComplete();
-          } else {
+          } else if (!levelCompleted) {
             showGameOver(false);
           }
         } else {
@@ -771,8 +808,35 @@ function updateScore(points) {
   } else if (currentMode === 'adventure') {
     const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
     uiScore.innerText = `${score} / ${config.target}`;
+    // Auto-advance when target is reached mid-play
+    if (points > 0 && score >= config.target && !levelCompleted) {
+      levelCompleted = true;
+      // Defer to allow current animation cycle to finish
+      setTimeout(() => handleLevelComplete(), 500);
+    }
   } else {
     uiScore.innerText = score;
+  }
+}
+
+function updateModeButtons() {
+  const zenBtn = document.getElementById('mode-zen-btn');
+  const taBtn = document.getElementById('mode-timeattack-btn');
+
+  if (currentLevelIndex >= 49) {
+    zenBtn.classList.remove('locked-mode');
+    zenBtn.querySelector('small').textContent = '10x10 - Juega sin límite de tiempo';
+  } else {
+    zenBtn.classList.add('locked-mode');
+    zenBtn.querySelector('small').textContent = `🔒 Se desbloquea en el Nivel 50`;
+  }
+
+  if (currentLevelIndex >= 29) {
+    taBtn.classList.remove('locked-mode');
+    taBtn.querySelector('small').textContent = '8x8 - ¡Compite en la clasificación!';
+  } else {
+    taBtn.classList.add('locked-mode');
+    taBtn.querySelector('small').textContent = `🔒 Se desbloquea en el Nivel 30`;
   }
 }
 
@@ -959,14 +1023,31 @@ function handleLevelComplete() {
 
   currentLevelIndex++;
   localStorage.setItem('bolitasLevel', currentLevelIndex);
+  updateModeButtons();
 
   const title = document.querySelector('#game-over h2');
-  title.innerText = `¡Nivel Completado!`;
+  title.innerText = `¡Nivel ${currentLevelIndex} Completado!`;
   document.getElementById('final-score').innerText = score;
   document.getElementById('play-again-btn').innerText = "Siguiente Nivel";
   document.getElementById('play-again-btn').dataset.action = 'next';
   document.getElementById('revive-btn').classList.add('hidden');
   document.getElementById('game-over').classList.remove('hidden');
+
+  // Interstitial every 10 levels starting from level 10
+  if (currentLevelIndex >= 10 && currentLevelIndex % 10 === 0) {
+    prepareInterstitial().then(() => showInterstitialAd());
+  }
+
+  // Mode unlock notifications
+  if (currentLevelIndex === 30) {
+    setTimeout(() => {
+      alert('🎉 ¡Has desbloqueado el Modo Contrarreloj! Compite por la mejor puntuación.');
+    }, 500);
+  } else if (currentLevelIndex === 50) {
+    setTimeout(() => {
+      alert('🎉 ¡Has desbloqueado el Modo Zen! Disfruta sin límites.');
+    }, 500);
+  }
 }
 
 function isBoardClear() {
