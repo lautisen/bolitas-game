@@ -5,6 +5,10 @@
   "plugins": {
     "AdMob": {
       "appId": "ca-app-pub-3539090903954344~8178124179"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0f1016"
     }
   }
 }

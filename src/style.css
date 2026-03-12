@@ -541,6 +541,14 @@ footer {
   font-weight: normal;
 }
 
+/* Locked mode buttons */
+.mode-btn.locked-mode {
+  opacity: 0.45;
+  filter: grayscale(0.5);
+  cursor: not-allowed;
+  position: relative;
+}
+
 .mt-3 {
   margin-top: 1.5rem;
 }
@@ -615,6 +623,15 @@ footer {
 
 .overlay-footer-buttons .text-btn {
   margin-top: 0;
+}
+
+/* Settings & Leaderboard always on top of other overlays */
+#settings-screen {
+  z-index: 500;
+}
+
+#leaderboard-screen {
+  z-index: 500;
 }
 
 /* Board Clear Celebration */
