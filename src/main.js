@@ -645,9 +645,10 @@ async function handleBolitaClick(startR, startC, el) {
         // In adventure mode, check if the target was reached
         if (currentMode === 'adventure') {
           const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
-          if (score >= config.target && !levelCompleted) {
+          if (score >= config.target) {
+            document.getElementById('pass-level-btn').classList.add('hidden');
             handleLevelComplete();
-          } else if (!levelCompleted) {
+          } else {
             showGameOver(false);
           }
         } else {
