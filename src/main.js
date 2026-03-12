@@ -3,6 +3,7 @@ import { saveScore, getLeaderboard } from './firebase.js';
 import { playSelectSound, playPopSound, playErrorSound, playGameOverSound } from './audio.js';
 import { checkAppVersion } from './versionCheck.js';
 import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 const bgmAudio = new Audio('./assets/bgm.mp3');
 bgmAudio.loop = true;
@@ -440,6 +441,52 @@ function hideLeaderboard() {
   document.getElementById('leaderboard-screen').classList.add('hidden');
 }
 
+// --- Local Notifications (Retention) ---
+const INACTIVITY_NOTIFICATIONS = [
+  { id: 101, delayH: 8, title: '¡Las bolitas te extrañan! 👀', body: 'Llevas 8 horas sin jugar, ¿qué tal una partida rápida de Gloop?' },
+  { id: 102, delayH: 24, title: '¡Récords por batir! 🏆', body: 'Tu puntuación máxima te está esperando. ¡Entra y supérala!' },
+  { id: 103, delayH: 48, title: 'Modo Zen te espera 🧘‍♀️', body: 'Hace dos días que no juegas. Relájate conectando colores sin límite de tiempo.' },
+  { id: 104, delayH: 72, title: '¡El reto se pone difícil! 🔥', body: 'Nuevos desafíos y niveles te esperan. ¿Te atreves?' },
+  { id: 105, delayH: 120, title: '¡Ayuda! Estamos atascadas 🆘', body: 'Hace 5 días que no limpias el tablero. ¡Ven a hacer estallar colores!' },
+  { id: 106, delayH: 168, title: 'Tiempo Extra de regalo 🎁', body: '¡Ha pasado una semana! Entra ahora y revive tu próxima partida totalmente gratis.' },
+  { id: 107, delayH: 240, title: 'Alerta Máxima Nivel 100 🚨', body: 'Llevas 10 días fuera. ¡El tablero está a punto de desbordarse, entra rápido!' }
+];
+
+async function setupInactivityNotifications() {
+  try {
+    // Request permission if not determined/denied (Android 13+)
+    let permStatus = await LocalNotifications.checkPermissions();
+    if (permStatus.display !== 'granted') {
+      permStatus = await LocalNotifications.requestPermissions();
+      if (permStatus.display !== 'granted') return; // User denied
+    }
+
+    // Cancel all previously scheduled notifications to reset the timer
+    const pending = await LocalNotifications.getPending();
+    if (pending.notifications.length > 0) {
+      await LocalNotifications.cancel(pending);
+    }
+
+    // Schedule new ones
+    const now = Date.now();
+    const notificationsToSchedule = INACTIVITY_NOTIFICATIONS.map(n => {
+      const scheduleTime = new Date(now + n.delayH * 60 * 60 * 1000);
+      return {
+        id: n.id,
+        title: n.title,
+        body: n.body,
+        schedule: { at: scheduleTime },
+        smallIcon: 'ic_launcher_round'
+      };
+    });
+
+    await LocalNotifications.schedule({ notifications: notificationsToSchedule });
+  } catch (e) {
+    console.error('Error setup local notifications:', e);
+  }
+}
+// ---------------------------------------
+
 function returnToMainMenu() {
   document.getElementById('game-over').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
@@ -480,6 +527,9 @@ function initGame(isRevive = false) {
     comboMultiplier = 1;
     hasUsedRevive = false;
     levelCompleted = false;
+
+    // Reset inactivity notifications timer
+    setupInactivityNotifications();
   }
 
   updateScore(0);
