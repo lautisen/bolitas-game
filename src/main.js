@@ -160,19 +160,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Game Mode Selection
   document.getElementById('mode-levels-btn').addEventListener('click', () => {
     currentMode = 'adventure';
-    initGame();
+    startGame();
   });
   document.getElementById('mode-zen-btn').addEventListener('click', () => {
     if (localStorage.getItem('bolitasLevel') < 50) return;
     localStorage.setItem('hasPlayedZen', 'true');
     currentMode = 'zen';
-    initGame();
+    startGame();
   });
   document.getElementById('mode-timeattack-btn').addEventListener('click', () => {
     if (localStorage.getItem('bolitasLevel') < 30) return;
     localStorage.setItem('hasPlayedTimeAttack', 'true');
     currentMode = 'timeattack';
-    initGame();
+    startGame();
   });
 
   document.getElementById('revive-btn').addEventListener('click', showRewardedAd);
