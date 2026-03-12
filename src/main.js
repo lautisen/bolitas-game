@@ -528,7 +528,30 @@ function initGame(isRevive = false) {
 
   for (let r = 0; r < currentRows; r++) {
     for (let c = 0; c < currentCols; c++) {
-      const color = currentColorSet[Math.floor(Math.random() * currentColors)];
+      let color = null;
+      let fails = 0;
+
+      if (currentMode === 'adventure') {
+        fails = parseInt(localStorage.getItem('bolitasLevelFails') || '0');
+      }
+
+      // Invisible adaptive difficulty: cluster colors if failed >= 3 times
+      if (fails >= 3) {
+        const clusterChance = Math.min(0.7, (fails - 2) * 0.15);
+        if (Math.random() < clusterChance) {
+          const neighbors = [];
+          if (r > 0 && grid[r - 1][c]) neighbors.push(grid[r - 1][c].color);
+          if (c > 0 && grid[r][c - 1]) neighbors.push(grid[r][c - 1].color);
+          if (neighbors.length > 0) {
+            color = neighbors[Math.floor(Math.random() * neighbors.length)];
+          }
+        }
+      }
+
+      if (!color) {
+        color = currentColorSet[Math.floor(Math.random() * currentColors)];
+      }
+
       createBolita(r, c, color);
     }
   }
@@ -782,7 +805,31 @@ function refillBoard() {
   for (let c = 0; c < currentCols; c++) {
     for (let r = 0; r < currentRows; r++) {
       if (grid[r][c] === null) {
-        const color = COLORS[Math.floor(Math.random() * currentColors)];
+        let color = null;
+        let fails = 0;
+
+        if (currentMode === 'adventure') {
+          fails = parseInt(localStorage.getItem('bolitasLevelFails') || '0');
+        }
+
+        if (fails >= 3) {
+          const clusterChance = Math.min(0.7, (fails - 2) * 0.15);
+          if (Math.random() < clusterChance) {
+            const neighbors = [];
+            // Check below since we fill from top
+            if (r < currentRows - 1 && grid[r + 1][c]) neighbors.push(grid[r + 1][c].color);
+            if (c > 0 && grid[r][c - 1]) neighbors.push(grid[r][c - 1].color);
+            if (c < currentCols - 1 && grid[r][c + 1]) neighbors.push(grid[r][c + 1].color);
+            if (neighbors.length > 0) {
+              color = neighbors[Math.floor(Math.random() * neighbors.length)];
+            }
+          }
+        }
+
+        if (!color) {
+          color = currentColorSet[Math.floor(Math.random() * currentColors)];
+        }
+
         createBolita(r, c, color);
 
         // Little trick to animate falling from top
@@ -992,6 +1039,10 @@ async function showGameOver(timeout = false) {
   if (currentMode === 'adventure' && !timeout) {
     document.getElementById('play-again-btn').innerText = "Reintentar";
     document.getElementById('play-again-btn').dataset.action = 'retry';
+
+    // Track failures for dynamic difficulty
+    let fails = parseInt(localStorage.getItem('bolitasLevelFails') || '0');
+    localStorage.setItem('bolitasLevelFails', fails + 1);
   } else {
     document.getElementById('play-again-btn').innerText = "Menú Principal";
     document.getElementById('play-again-btn').dataset.action = 'menu';
@@ -1028,6 +1079,7 @@ function handleLevelComplete() {
 
   currentLevelIndex++;
   localStorage.setItem('bolitasLevel', currentLevelIndex);
+  localStorage.removeItem('bolitasLevelFails'); // Reset fails on success
   updateModeButtons();
 
   const title = document.querySelector('#game-over h2');
