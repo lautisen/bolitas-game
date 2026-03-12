@@ -1183,16 +1183,8 @@ function handleLevelComplete() {
     prepareInterstitial().then(() => showInterstitialAd());
   }
 
-  // Mode unlock notifications
-  if (currentLevelIndex === 30) {
-    setTimeout(() => {
-      alert('🎉 ¡Has desbloqueado el Modo Contrarreloj! Compite por la mejor puntuación.');
-    }, 500);
-  } else if (currentLevelIndex === 50) {
-    setTimeout(() => {
-      alert('🎉 ¡Has desbloqueado el Modo Zen! Disfruta sin límites.');
-    }, 500);
-  }
+  // Mode unlock notifications are handled automatically by updateModeButtons() when called above
+  // if currentLevelIndex reaches 30 or 50. No need for alerts here.
 }
 
 function isBoardClear() {
