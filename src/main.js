@@ -79,6 +79,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // UI Handlers
   document.getElementById('restart-btn').addEventListener('click', () => initGame());
+  document.getElementById('pass-level-btn').addEventListener('click', () => {
+    document.getElementById('pass-level-btn').classList.add('hidden');
+    handleLevelComplete();
+  });
   document.getElementById('play-again-btn').addEventListener('click', () => {
     const btn = document.getElementById('play-again-btn');
     if (btn.dataset.action === 'retry' || btn.dataset.action === 'next') {
@@ -466,6 +470,7 @@ function startGame() {
 
 function initGame(isRevive = false) {
   document.getElementById('game-over').classList.add('hidden');
+  document.getElementById('pass-level-btn').classList.add('hidden');
   showBannerAd();
   uiGrid.innerHTML = '';
 
@@ -808,11 +813,10 @@ function updateScore(points) {
   } else if (currentMode === 'adventure') {
     const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
     uiScore.innerText = `${score} / ${config.target}`;
-    // Auto-advance when target is reached mid-play
-    if (points > 0 && score >= config.target && !levelCompleted) {
+    // Show pass-level button when target is reached
+    if (score >= config.target && !levelCompleted) {
       levelCompleted = true;
-      // Defer to allow current animation cycle to finish
-      setTimeout(() => handleLevelComplete(), 500);
+      document.getElementById('pass-level-btn').classList.remove('hidden');
     }
   } else {
     uiScore.innerText = score;
