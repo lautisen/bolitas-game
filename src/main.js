@@ -151,26 +151,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Game Mode Selection Handlers
+  // Unlocked overlay btn
+  document.getElementById('unlocked-continue-btn').addEventListener('click', () => {
+    document.getElementById('mode-unlocked-screen').classList.add('hidden');
+  });
+
+  // Game Mode Selection
   document.getElementById('mode-levels-btn').addEventListener('click', () => {
     currentMode = 'adventure';
-    startGame();
+    initGame();
   });
   document.getElementById('mode-zen-btn').addEventListener('click', () => {
-    if (currentLevelIndex < 49) {
-      alert(`El Modo Zen se desbloquea en el Nivel 50. Estás en el Nivel ${currentLevelIndex + 1}.`);
-      return;
-    }
+    if (localStorage.getItem('bolitasLevel') < 50) return;
+    localStorage.setItem('hasPlayedZen', 'true');
     currentMode = 'zen';
-    startGame();
+    initGame();
   });
   document.getElementById('mode-timeattack-btn').addEventListener('click', () => {
-    if (currentLevelIndex < 29) {
-      alert(`El Modo Contrarreloj se desbloquea en el Nivel 30. Estás en el Nivel ${currentLevelIndex + 1}.`);
-      return;
-    }
+    if (localStorage.getItem('bolitasLevel') < 30) return;
+    localStorage.setItem('hasPlayedTimeAttack', 'true');
     currentMode = 'timeattack';
-    startGame();
+    initGame();
   });
 
   document.getElementById('revive-btn').addEventListener('click', showRewardedAd);
@@ -875,20 +876,57 @@ function updateModeButtons() {
   const zenBtn = document.getElementById('mode-zen-btn');
   const taBtn = document.getElementById('mode-timeattack-btn');
 
-  if (currentLevelIndex >= 49) {
-    zenBtn.classList.remove('locked-mode');
-    zenBtn.querySelector('small').textContent = '10x10 - Juega sin límite de tiempo';
-  } else {
-    zenBtn.classList.add('locked-mode');
-    zenBtn.querySelector('small').textContent = `🔒 Se desbloquea en el Nivel 50`;
-  }
+  const lvl = parseInt(localStorage.getItem('bolitasLevel') || '1');
 
-  if (currentLevelIndex >= 29) {
+  // Time Attack (Level 30+)
+  if (lvl >= 30) {
     taBtn.classList.remove('locked-mode');
     taBtn.querySelector('small').textContent = '8x8 - ¡Compite en la clasificación!';
+    if (!localStorage.getItem('alerted_timeattack_30')) {
+      localStorage.setItem('alerted_timeattack_30', 'true');
+      document.getElementById('unlocked-mode-name').innerText = "Contrarreloj";
+      document.getElementById('unlocked-mode-desc').innerText = "¡Compite en la clasificación mundial de 8x8!";
+      document.getElementById('mode-unlocked-screen').classList.remove('hidden');
+    }
+
+    // Add glow and badge if unlocked but not played yet
+    if (!localStorage.getItem('hasPlayedTimeAttack')) {
+      taBtn.classList.add('new-mode-glow');
+      taBtn.querySelector('span').innerHTML = 'Contrarreloj <span class="new-badge">¡Nuevo!</span>';
+    } else {
+      taBtn.classList.remove('new-mode-glow');
+      taBtn.querySelector('span').innerHTML = 'Contrarreloj';
+    }
   } else {
     taBtn.classList.add('locked-mode');
-    taBtn.querySelector('small').textContent = `🔒 Se desbloquea en el Nivel 30`;
+    taBtn.querySelector('span').innerHTML = 'Contrarreloj 🔒';
+    taBtn.querySelector('small').textContent = '🔒 Se desbloquea en el Nivel 30';
+    taBtn.classList.remove('new-mode-glow');
+  }
+
+  // Zen Mode (Level 50+)
+  if (lvl >= 50) {
+    zenBtn.classList.remove('locked-mode');
+    zenBtn.querySelector('small').textContent = '10x10 - Juega sin límite de tiempo';
+    if (!localStorage.getItem('alerted_zen_50')) {
+      localStorage.setItem('alerted_zen_50', 'true');
+      document.getElementById('unlocked-mode-name').innerText = "Modo Zen";
+      document.getElementById('unlocked-mode-desc').innerText = "Juega de forma relajada y gana fondos para revivir.";
+      document.getElementById('mode-unlocked-screen').classList.remove('hidden');
+    }
+
+    if (!localStorage.getItem('hasPlayedZen')) {
+      zenBtn.classList.add('new-mode-glow');
+      zenBtn.querySelector('span').innerHTML = 'Modo Zen <span class="new-badge">¡Nuevo!</span>';
+    } else {
+      zenBtn.classList.remove('new-mode-glow');
+      zenBtn.querySelector('span').innerHTML = 'Modo Zen';
+    }
+  } else {
+    zenBtn.classList.add('locked-mode');
+    zenBtn.querySelector('span').innerHTML = 'Modo Zen 🔒';
+    zenBtn.querySelector('small').textContent = '🔒 Se desbloquea en el Nivel 50';
+    zenBtn.classList.remove('new-mode-glow');
   }
 }
 

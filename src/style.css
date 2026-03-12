@@ -616,6 +616,7 @@ footer {
 
 .mode-btn small {
   font-size: 0.8rem;
+  font-size: 0.8rem;
   opacity: 0.8;
   margin-top: 0.2rem;
   font-weight: normal;
@@ -627,6 +628,53 @@ footer {
   filter: grayscale(0.5);
   cursor: not-allowed;
   position: relative;
+}
+
+/* New Mode Glow Animation */
+.new-mode-glow {
+  animation: modeUnlockGlow 1.5s infinite alternate ease-in-out;
+  border-color: rgba(245, 158, 11, 0.6);
+  position: relative;
+}
+
+@keyframes modeUnlockGlow {
+  0% {
+    box-shadow: 0 0 5px rgba(245, 158, 11, 0.3), inset 0 0 10px rgba(245, 158, 11, 0.1);
+    transform: scale(1);
+  }
+
+  100% {
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.6), inset 0 0 20px rgba(245, 158, 11, 0.3);
+    transform: scale(1.02);
+  }
+}
+
+.new-badge {
+  display: inline-block;
+  background: var(--clr-red);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 8px rgba(255, 59, 92, 0.5);
+  animation: badgePulse 2s infinite;
+}
+
+@keyframes badgePulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.1);
+  }
 }
 
 .mt-3 {
