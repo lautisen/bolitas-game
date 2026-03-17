@@ -6,17 +6,6 @@ export const connectorConfig = {
   location: 'us-east4'
 };
 
-export const upsertScoreRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
-  dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'UpsertScore', inputVars);
-}
-upsertScoreRef.operationName = 'UpsertScore';
-
-export function upsertScore(dcOrVars, vars) {
-  return executeMutation(upsertScoreRef(dcOrVars, vars));
-}
-
 export const getTopScoresRef = (dc) => {
   const { dc: dcInstance} = validateArgs(connectorConfig, dc, undefined);
   dcInstance._useGeneratedSdk();
@@ -37,5 +26,16 @@ getPlayerScoreRef.operationName = 'GetPlayerScore';
 
 export function getPlayerScore(dcOrVars, vars) {
   return executeQuery(getPlayerScoreRef(dcOrVars, vars));
+}
+
+export const upsertScoreRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return mutationRef(dcInstance, 'UpsertScore', inputVars);
+}
+upsertScoreRef.operationName = 'UpsertScore';
+
+export function upsertScore(dcOrVars, vars) {
+  return executeMutation(upsertScoreRef(dcOrVars, vars));
 }
 

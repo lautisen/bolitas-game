@@ -1,10 +1,10 @@
 :root {
   --cols: 10;
   --rows: 12;
-  --bg-color-1: #0f1016;
-  --bg-color-2: #281a3d;
+  --bg-color-1: #1a1a2e;
+  --bg-color-2: #3d2c5e;
   --text-primary: #f0f0f5;
-  --text-dim: #aab4cc;
+  --text-dim: #c0c8dc;
 
   --clr-red: #ff3b5c;
   --clr-blue: #3b82f6;
@@ -19,6 +19,13 @@
 /* Generic utility: hide any element */
 .hidden {
   display: none !important;
+}
+
+html {
+  /* Prevent system font size settings from breaking the game layout */
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  font-size: 16px;
 }
 
 * {
@@ -40,27 +47,33 @@ body {
   justify-content: center;
   align-items: center;
   overflow: hidden;
-  /* Safe area for notched phones */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 #game-container {
+  position: relative;
   width: 100%;
   max-width: 500px;
   height: 100vh;
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, rgba(40, 26, 61, 0.95), rgba(15, 16, 22, 0.98));
-  border-left: 1px solid rgba(255, 255, 255, 0.05);
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(180deg, rgba(61, 44, 94, 0.95), rgba(26, 26, 46, 0.98));
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
   overflow: hidden;
-  /* Reserve space for banner ad at bottom */
-  padding-bottom: 60px;
+  /* Safe area: robust approach with fallbacks for all WebViews */
+  padding-top: 44px;
+  padding-top: constant(safe-area-inset-top);
+  /* iOS 11.0-11.1 */
+  padding-top: env(safe-area-inset-top);
+  /* iOS 11.2+ */
+  padding-top: max(44px, env(safe-area-inset-top, 44px));
+  padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
 }
 
 header {
+  position: relative;
   padding: 0.6rem 1rem;
   display: flex;
   flex-direction: column;
@@ -69,23 +82,39 @@ header {
   flex-shrink: 0;
 }
 
-.header-top {
+.header-content {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   width: 100%;
 }
 
-.header-buttons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.user-info {
+.header-left {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.2rem;
+}
+
+.header-left h2 {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--clr-yellow);
+  text-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+
+.score-subtext {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  opacity: 0.9;
+}
+
+.header-right {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 #current-username {
@@ -107,22 +136,17 @@ header {
   color: var(--text-primary);
 }
 
-.score-board {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+/* Removed .score-board classes in favor of .header-content */
 
-.score-board h2 {
-  font-size: 1.6rem;
-  font-weight: 700;
-  text-shadow: 0 2px 10px currentColor;
-  color: var(--clr-yellow);
-}
-
-/* Pass Level Button */
+/* Pass Level Button — absolute so it doesn't shift the grid */
 .pass-level-btn {
-  width: 100%;
+  position: absolute;
+  bottom: -2.6rem;
+  /* Peeks just below the header border */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  margin-top: 0;
   padding: 0.7rem 1rem;
   font-size: 1rem;
   font-weight: 700;
@@ -131,19 +155,20 @@ header {
   color: #fff;
   border-radius: 10px;
   cursor: pointer;
+  z-index: 50;
   animation: passLevelGlow 1.5s infinite alternate ease-in-out;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 @keyframes passLevelGlow {
   0% {
-    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4), 0 0 20px rgba(16, 185, 129, 0.2);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
     filter: brightness(1);
   }
 
   100% {
-    box-shadow: 0 0 15px rgba(16, 185, 129, 0.7), 0 0 40px rgba(16, 185, 129, 0.4), 0 0 60px rgba(245, 158, 11, 0.2);
-    filter: brightness(1.15);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+    filter: brightness(1.1);
   }
 }
 
@@ -195,77 +220,118 @@ header {
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.05);
   box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
+  overflow: visible;
   container-type: size;
+}
+
+/* Selection group outline — marching ants via SVG */
+#selection-outline line {
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 10 5;
+  animation: marchingAnts 0.45s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.6));
+}
+
+@keyframes marchingAnts {
+  to {
+    stroke-dashoffset: -15;
+  }
 }
 
 .bolita {
   position: absolute;
-  /* Leaves 10% gap inside its cell to avoid looking like a solid block */
-  width: calc((100% / var(--cols)) * 0.9);
-  height: calc((100% / var(--rows)) * 0.9);
+  /* Full cell size for square hitbox — gaps are visual only via ::before */
+  width: calc(100% / var(--cols));
+  height: calc(100% / var(--rows));
   left: 0;
   top: 0;
-  transform: translate3d(calc((var(--col) * 100cqw / var(--cols)) + (100cqw / var(--cols) * 0.05)),
-      calc((var(--row) * 100cqh / var(--rows)) + (100cqh / var(--rows) * 0.05)),
+  transform: translate3d(calc(var(--col) * 100cqw / var(--cols)),
+      calc(var(--row) * 100cqh / var(--rows)),
       0);
-  border-radius: 50%;
-  box-shadow:
-    inset -3px -3px 6px rgba(0, 0, 0, 0.35),
-    inset 3px 3px 6px rgba(255, 255, 255, 0.25);
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
   cursor: pointer;
   z-index: 1;
-  will-change: transform, opacity;
-  contain: layout style;
+  will-change: transform;
+  contain: layout style paint;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.bolita:hover {
+/* Visual circle inside the full-cell hitbox */
+.bolita::before {
+  content: '';
+  display: block;
+  width: 90%;
+  height: 90%;
+  border-radius: 50%;
+  background: inherit;
+  box-shadow:
+    inset -3px -3px 6px rgba(0, 0, 0, 0.35),
+    inset 3px 3px 6px rgba(255, 255, 255, 0.25);
+  transition: filter 0.2s, transform 0.2s;
+  /* Ensure pseudo-element inherits the background color from data-color styles */
+  background: var(--bolita-color);
+}
+
+.bolita:hover::before {
   filter: brightness(1.15);
-  z-index: 10;
+  transform: scale(1.05);
 }
 
 .bolita.popped {
   opacity: 0;
-  filter: blur(2px);
-  transition: opacity 0.25s, filter 0.25s;
+  transition: opacity 0.25s;
 }
 
-/* Bolita Colors */
-.bolita[data-color="red"] {
+.bolita.popped::before {
+  filter: blur(2px);
+  transition: filter 0.25s;
+}
+
+/* Bolita Colors — applied via ::before pseudo-element */
+.bolita[data-color="red"]::before {
   background: var(--clr-red);
 }
 
-.bolita[data-color="blue"] {
+.bolita[data-color="blue"]::before {
   background: var(--clr-blue);
 }
 
-.bolita[data-color="green"] {
+.bolita[data-color="green"]::before {
   background: var(--clr-green);
 }
 
-.bolita[data-color="yellow"] {
+.bolita[data-color="yellow"]::before {
   background: var(--clr-yellow);
 }
 
-.bolita[data-color="cyan"] {
+.bolita[data-color="cyan"]::before {
   background: var(--clr-cyan);
 }
 
-.bolita[data-color="purple"] {
+.bolita[data-color="purple"]::before {
   background: var(--clr-purple);
 }
 
-.bolita[data-color="orange"] {
+.bolita[data-color="orange"]::before {
   background: var(--clr-orange);
 }
 
-.bolita[data-color="pink"] {
+.bolita[data-color="pink"]::before {
   background: var(--clr-pink);
 }
 
 .bolita.selected {
   z-index: 5;
+}
+
+.bolita.selected::before {
   outline: 3px solid rgba(255, 255, 255, 0.85);
   outline-offset: -3px;
   animation: selectedPulse 0.8s infinite alternate ease-in-out;
@@ -273,6 +339,9 @@ header {
 
 .bolita.hint {
   z-index: 4;
+}
+
+.bolita.hint::before {
   animation: hintPulse 0.6s infinite alternate ease-in-out;
 }
 
@@ -298,17 +367,22 @@ header {
   }
 }
 
-/* Colorblind Mode Shapes */
+/* Colorblind Mode Shapes — placed inside ::before (the visual circle) */
+body.color-blind-mode .bolita::before {
+  position: relative;
+}
+
 body.color-blind-mode .bolita::after {
   content: '';
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 40%;
-  height: 40%;
-  background-color: rgba(255, 255, 255, 0.8);
+  width: 36%;
+  height: 36%;
+  background-color: rgba(255, 255, 255, 0.85);
   pointer-events: none;
+  z-index: 2;
 }
 
 body.color-blind-mode .bolita[data-color="red"]::after {
@@ -323,12 +397,11 @@ body.color-blind-mode .bolita[data-color="blue"]::after {
 
 body.color-blind-mode .bolita[data-color="green"]::after {
   /* Triangle */
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.85);
   border: none;
-  width: 35%;
-  height: 35%;
+  width: 32%;
+  height: 32%;
   clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-  top: 50%;
 }
 
 body.color-blind-mode .bolita[data-color="yellow"]::after {
@@ -340,25 +413,25 @@ body.color-blind-mode .bolita[data-color="yellow"]::after {
 body.color-blind-mode .bolita[data-color="purple"]::after {
   /* Cross */
   background-color: transparent;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)), linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8));
+  background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85));
   background-position: center;
   background-size: 100% 30%, 30% 100%;
   background-repeat: no-repeat;
-  width: 50%;
-  height: 50%;
+  width: 45%;
+  height: 45%;
 }
 
 body.color-blind-mode .bolita[data-color="pink"]::after {
   /* Donut */
   border-radius: 50%;
   background-color: transparent;
-  border: 4px solid rgba(255, 255, 255, 0.8);
+  border: 4px solid rgba(255, 255, 255, 0.85);
 }
 
 body.color-blind-mode .bolita[data-color="orange"]::after {
   /* Plus inside a box */
   background-color: transparent;
-  border: 2px solid rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 2px;
 }
 
@@ -399,6 +472,59 @@ footer {
   flex-shrink: 0;
 }
 
+/* Tutorial instruction banner — hidden, replaced by hand animation */
+#tutorial-text {
+  display: none !important;
+}
+
+/* Tutorial animated hand tap */
+#tutorial-hand {
+  position: absolute;
+  font-size: 3.5rem;
+  pointer-events: none;
+  z-index: 200;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.6));
+  animation: tapAnim 1s ease-in-out infinite;
+  transform-origin: 50% 10%;
+  /* pivot near fingertip */
+  display: none;
+  /* shown via JS */
+}
+
+@keyframes tapAnim {
+  0% {
+    transform: scale(1) rotate(-5deg) translateY(0);
+    opacity: 1;
+  }
+
+  35% {
+    transform: scale(0.78) rotate(-5deg) translateY(8px);
+    opacity: 0.9;
+  }
+
+  55% {
+    transform: scale(0.82) rotate(-5deg) translateY(5px);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1) rotate(-5deg) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes tutorialTextPulse {
+
+  0% {
+    opacity: 0.75;
+  }
+
+  100% {
+    opacity: 1;
+    letter-spacing: 0.02em;
+  }
+}
+
 /* Responsive: small screens */
 @media (max-height: 650px) {
   header {
@@ -417,6 +543,7 @@ footer {
   .pass-level-btn {
     padding: 0.5rem 0.8rem;
     font-size: 0.85rem;
+    bottom: -2.2rem;
   }
 
   footer {
@@ -450,11 +577,11 @@ footer {
   display: flex;
   justify-content: center;
   align-items: center;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
   z-index: 100;
   opacity: 1;
-  transition: opacity 0.5s;
+  transition: opacity 0.3s;
 }
 
 .overlay.hidden {
@@ -844,98 +971,64 @@ footer {
   margin-bottom: 0.5rem !important;
 }
 
-/* Tutorial */
-.tutorial-panel {
-  max-width: 340px;
-  text-align: center;
-}
-
-.tutorial-panel h2 {
-  font-size: 1.3rem;
-  margin-bottom: 0.8rem;
-}
-
-.tutorial-panel p {
-  font-size: 0.95rem;
-  color: var(--text-dim);
-  line-height: 1.4;
-  margin-top: 0.8rem;
-}
-
-.tutorial-demo {
-  display: flex;
+/* Tutorial — interactive instruction box overlaid on the live game board */
+#tutorial-screen {
   justify-content: center;
-  margin: 1rem 0;
+  align-items: center;
+  padding-top: 60%;
 }
 
-.tutorial-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2px;
-  width: 130px;
-  height: 130px;
+.tutorial-instruction-box {
+  pointer-events: none;
+  background: rgba(15, 16, 22, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 1rem 1.4rem;
+  text-align: center;
+  max-width: 80%;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  animation: tutorialBoxEntrance 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
-.tutorial-ball {
-  border-radius: 50%;
-  aspect-ratio: 1;
-  transition: all 0.3s;
+.tutorial-instruction-box p {
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.5;
 }
 
-.tutorial-ball.highlighted {
-  animation: hintPulse 0.8s infinite alternate ease-in-out;
-  box-shadow: 0 0 10px 3px rgba(255, 255, 255, 0.4);
-}
-
-.tutorial-ball.selected-demo {
-  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.9);
-  animation: selectedPulse 0.8s infinite alternate ease-in-out;
-}
-
-.tutorial-ball.empty-demo {
-  background: rgba(255, 255, 255, 0.05) !important;
-  border: 2px dashed rgba(255, 255, 255, 0.15);
-}
-
-.tutorial-ball.falling-demo {
-  animation: tutorialFall 1.2s infinite ease-in-out;
-}
-
-@keyframes tutorialFall {
-
-  0%,
-  40% {
-    transform: translateY(0);
+@keyframes tutorialBoxEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
   }
 
-  60%,
   100% {
-    transform: translateY(8px);
-    opacity: 0.7;
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
-.tutorial-nav {
+.loader-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--clr-blue);
+  border-radius: 50%;
+  animation: spinnerRotate 1s linear infinite;
+  margin: 0 auto 20px auto;
+}
+
+@keyframes spinnerRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ad-loading-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.8rem;
-  margin-top: 1.2rem;
-}
-
-#tutorial-dots {
-  display: flex;
-  gap: 8px;
-}
-
-.tutorial-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  transition: background 0.3s;
-}
-
-.tutorial-dot.active {
-  background: rgba(255, 255, 255, 0.8);
 }

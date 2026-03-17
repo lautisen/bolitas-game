@@ -41,18 +41,6 @@ export interface UpsertScoreVariables {
   score: number;
 }
 
-interface UpsertScoreRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars: UpsertScoreVariables): MutationRef<UpsertScoreData, UpsertScoreVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: UpsertScoreVariables): MutationRef<UpsertScoreData, UpsertScoreVariables>;
-  operationName: string;
-}
-export const upsertScoreRef: UpsertScoreRef;
-
-export function upsertScore(vars: UpsertScoreVariables): MutationPromise<UpsertScoreData, UpsertScoreVariables>;
-export function upsertScore(dc: DataConnect, vars: UpsertScoreVariables): MutationPromise<UpsertScoreData, UpsertScoreVariables>;
-
 interface GetTopScoresRef {
   /* Allow users to create refs without passing in DataConnect */
   (): QueryRef<GetTopScoresData, undefined>;
@@ -76,4 +64,16 @@ export const getPlayerScoreRef: GetPlayerScoreRef;
 
 export function getPlayerScore(vars: GetPlayerScoreVariables): QueryPromise<GetPlayerScoreData, GetPlayerScoreVariables>;
 export function getPlayerScore(dc: DataConnect, vars: GetPlayerScoreVariables): QueryPromise<GetPlayerScoreData, GetPlayerScoreVariables>;
+
+interface UpsertScoreRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: UpsertScoreVariables): MutationRef<UpsertScoreData, UpsertScoreVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: UpsertScoreVariables): MutationRef<UpsertScoreData, UpsertScoreVariables>;
+  operationName: string;
+}
+export const upsertScoreRef: UpsertScoreRef;
+
+export function upsertScore(vars: UpsertScoreVariables): MutationPromise<UpsertScoreData, UpsertScoreVariables>;
+export function upsertScore(dc: DataConnect, vars: UpsertScoreVariables): MutationPromise<UpsertScoreData, UpsertScoreVariables>;
 

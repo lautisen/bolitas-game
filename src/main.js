@@ -4,6 +4,8 @@ import { playSelectSound, playPopSound, playErrorSound, playGameOverSound } from
 import { checkAppVersion } from './versionCheck.js';
 import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { FirebaseAnalytics } from '@capacitor-firebase/analytics';
+
 
 const bgmAudio = new Audio('./assets/bgm.mp3');
 bgmAudio.loop = true;
@@ -30,7 +32,8 @@ function generateLevels() {
     else if (level <= 35) colors = 5;
     else colors = 6;
     // Target score: gradual curve
-    const target = Math.round(80 + (i * 60) + (i * i * 1.5));
+    // Target score: gradual curve, rounded to the nearest 100
+    const target = Math.round((100 + (i * 80) + (Math.pow(i, 1.3) * 10)) / 100) * 100;
     levels.push({ target, rows: size, cols: size, colors });
   }
   return levels;
@@ -48,7 +51,9 @@ let currentColorSet = COLORS; // which palette to use
 
 let grid = [];
 let score = 0;
-let uiScore;
+let uiScore; // This will link to the subtext area as well
+let uiHeaderMode;
+let uiHeaderScoreDetails;
 let uiGrid;
 let isAnimating = false;
 let selectedGroup = [];
@@ -57,8 +62,8 @@ let comboMultiplier = 1;
 let lastPopTime = 0;
 let comboTimeout = null;
 
-let isAudioEnabled = true;
-let isColorblindEnabled = false;
+let isAudioEnabled = localStorage.getItem('bolitasAudioEnabled') !== 'false';
+let isColorblindEnabled = localStorage.getItem('bolitasColorblindEnabled') === 'true';
 let hintTimeout = null;
 const HINT_DELAY = 5000; // 5 seconds
 let hasUsedRevive = false;
@@ -71,15 +76,27 @@ const elementPositionMap = new WeakMap();
 // Performance: track hinted elements to avoid querySelectorAll
 let hintedElements = [];
 
-document.addEventListener('DOMContentLoaded', () => {
-  uiScore = document.getElementById('score');
+document.addEventListener('DOMContentLoaded', async () => {
+  uiHeaderMode = document.getElementById('header-mode-display');
+  uiHeaderScoreDetails = document.getElementById('header-score-details');
   uiGrid = document.getElementById('grid');
 
-  // Check for updates
-  checkAppVersion();
+  // Check for updates - Wait for it to complete
+  const isUpdateRequired = await checkAppVersion();
+
+  // Log app open
+  FirebaseAnalytics.logEvent({ name: 'app_open', params: {} });
+
+  if (isUpdateRequired) {
+    console.log('App update required. Stopping initialization.');
+    return;
+  }
+
+  // Ask for notification permission early, before the user starts playing
+  requestNotificationPermission();
 
   // UI Handlers
-  document.getElementById('restart-btn').addEventListener('click', () => initGame());
+
   document.getElementById('pass-level-btn').addEventListener('click', () => {
     document.getElementById('pass-level-btn').classList.add('hidden');
     handleLevelComplete();
@@ -110,9 +127,9 @@ document.addEventListener('DOMContentLoaded', () => {
       showGameOver(false);
     }
   });
-  document.getElementById('logout-settings-btn').addEventListener('click', () => {
+  document.getElementById('exit-settings-btn').addEventListener('click', () => {
     document.getElementById('settings-screen').classList.add('hidden');
-    logoutUser();
+    returnToMainMenu();
   });
 
   // Settings Handlers (header button)
@@ -133,8 +150,14 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', showLeaderboard);
   });
 
+  // Initialize settings UI
+  document.getElementById('audio-toggle').checked = isAudioEnabled;
+  document.getElementById('colorblind-toggle').checked = isColorblindEnabled;
+  if (isColorblindEnabled) document.body.classList.add('color-blind-mode');
+
   document.getElementById('audio-toggle').addEventListener('change', (e) => {
     isAudioEnabled = e.target.checked;
+    localStorage.setItem('bolitasAudioEnabled', isAudioEnabled);
     if (isAudioEnabled) {
       if (currentMode && !document.getElementById('login-screen').classList.contains('hidden') === false) {
         bgmAudio.play().catch(e => console.log('Autoplay prevented'));
@@ -145,6 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('colorblind-toggle').addEventListener('change', (e) => {
     isColorblindEnabled = e.target.checked;
+    localStorage.setItem('bolitasColorblindEnabled', isColorblindEnabled);
     if (isColorblindEnabled) {
       document.body.classList.add('color-blind-mode');
     } else {
@@ -185,20 +209,44 @@ async function initAdMob() {
   try {
     await AdMob.initialize({});
     console.log('AdMob initialized');
+    FirebaseAnalytics.logEvent({ name: 'admob_initialized', params: {} });
 
     // Rewarded ad listeners (v8 event names from source)
     const onRewarded = (rewardItem) => {
       console.log('User was rewarded', rewardItem);
       applyReviveReward();
     };
-    AdMob.addListener('onRewardedVideoAdReward', onRewarded);
-
-    // Also listen for ad dismissal to ensure we unpause/restore UI
-    // just in case the reward event fires before dismissal completes
-    AdMob.addListener('onRewardedVideoAdDismissed', () => {
-      console.log('Rewarded Video Dismissed');
+    const hideLoading = () => {
+      console.log('Hiding ad loading screen');
+      document.getElementById('ad-loading-screen').classList.add('hidden');
+      if (adLoadingTimeout) {
+        clearTimeout(adLoadingTimeout);
+        adLoadingTimeout = null;
+      }
       showBannerAd();
+    };
+
+    // Try both naming conventions for robustness across versions
+    const events = [
+      'interstitialAdDismissed', 'onInterstitialAdDismissed',
+      'interstitialAdFailedToLoad', 'onInterstitialAdFailedToLoad',
+      'interstitialAdFailedToShow', 'onInterstitialAdFailedToShow',
+      'rewardVideoAdDismissed', 'onRewardedVideoAdDismissed',
+      'rewardVideoAdFailedToLoad', 'onRewardedVideoAdFailedToLoad',
+      'rewardVideoAdFailedToShow', 'onRewardedVideoAdFailedToShow'
+    ];
+
+    events.forEach(eventName => {
+      AdMob.addListener(eventName, (err) => {
+        if (err) console.error(`Ad event ${eventName} with error: `, err);
+        else console.log(`Ad event: ${eventName} `);
+        hideLoading();
+      });
     });
+
+    // Keep the reward listener as is since it doesn't hide the loading screen (dismissal does)
+    AdMob.addListener('onRewardedVideoAdReward', onRewarded);
+    AdMob.addListener('rewardVideoAdReward', onRewarded);
 
     // Show banner globally as soon as initialized
     showBannerAd();
@@ -232,11 +280,31 @@ async function prepareRewarded() {
   }
 }
 
+let adLoadingTimeout = null;
+
 async function showInterstitialAd() {
   try {
+    document.getElementById('ad-loading-screen').classList.remove('hidden');
+
+    // Safety timeout: auto-hide after 5 seconds if ad fails or gets stuck
+    if (adLoadingTimeout) clearTimeout(adLoadingTimeout);
+    adLoadingTimeout = setTimeout(() => {
+      console.warn('Ad safety timeout reached, hiding loading screen');
+      document.getElementById('ad-loading-screen').classList.add('hidden');
+      adLoadingTimeout = null;
+    }, 5000);
+
+    // 2-second delay to ensure the user sees the disclaimer/multilingual messages
+    await new Promise(resolve => setTimeout(resolve, 2000));
     await AdMob.showInterstitial();
+    FirebaseAnalytics.logEvent({ name: 'ad_impression', params: { ad_type: 'interstitial' } });
   } catch (err) {
     console.error('Show Interstitial Error', err);
+    document.getElementById('ad-loading-screen').classList.add('hidden');
+    if (adLoadingTimeout) {
+      clearTimeout(adLoadingTimeout);
+      adLoadingTimeout = null;
+    }
   }
 }
 
@@ -246,19 +314,38 @@ async function showRewardedAd() {
 
   const reviveBtn = document.getElementById('revive-btn');
   const originalText = reviveBtn.innerText;
-  reviveBtn.innerText = '⏳ Cargando anuncio...';
+  reviveBtn.innerText = '⏳';
   reviveBtn.style.opacity = '0.6';
   reviveBtn.style.pointerEvents = 'none';
 
   try {
+    document.getElementById('ad-loading-screen').classList.remove('hidden');
+
+    // Safety timeout: auto-hide after 5 seconds
+    if (adLoadingTimeout) clearTimeout(adLoadingTimeout);
+    adLoadingTimeout = setTimeout(() => {
+      console.warn('Ad safety timeout reached, hiding loading screen');
+      document.getElementById('ad-loading-screen').classList.add('hidden');
+      adLoadingTimeout = null;
+    }, 5000);
+
+    // 2-second delay for rewards as well
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     const options = {
       adId: 'ca-app-pub-3539090903954344/5831162433',
       isTesting: false
     };
     await AdMob.prepareRewardVideoAd(options);
     await AdMob.showRewardVideoAd();
+    FirebaseAnalytics.logEvent({ name: 'ad_impression', params: { ad_type: 'rewarded' } });
   } catch (err) {
     console.error('Show Rewarded Error', err);
+    document.getElementById('ad-loading-screen').classList.add('hidden');
+    if (adLoadingTimeout) {
+      clearTimeout(adLoadingTimeout);
+      adLoadingTimeout = null;
+    }
   } finally {
     isAdLoading = false;
     reviveBtn.innerText = originalText;
@@ -278,6 +365,7 @@ async function showBannerAd() {
         isTesting: false,
       });
       isBannerCreated = true;
+      FirebaseAnalytics.logEvent({ name: 'ad_impression', params: { ad_type: 'banner' } });
     } else {
       await AdMob.resumeBanner();
     }
@@ -305,9 +393,9 @@ function applyReviveReward() {
   // Show confirmation screen before resuming timer
   const textEl = document.getElementById('reward-ready-text');
   if (currentMode === 'timeattack') {
-    textEl.innerHTML = "El tablero se ha rellenado.<br>¡Tienes 15 segundos extra!";
+    textEl.innerHTML = "Bonus Earned!<br>⏱️ +15 Seconds";
   } else {
-    textEl.innerHTML = "El tablero se ha rellenado.<br>¡Sigue jugando!";
+    textEl.innerHTML = "Life Restored!<br>Continue Playing";
   }
   document.getElementById('reward-ready-screen').classList.remove('hidden');
 }
@@ -365,7 +453,7 @@ function checkExistingSession() {
   if (savedUser) {
     // Returning user: skip login form, show mode menu directly
     currentUser = savedUser;
-    document.getElementById('current-username').innerText = currentUser;
+    // document.getElementById('current-username').innerText = currentUser;
     document.getElementById('auth-panel').classList.add('hidden');
     document.getElementById('main-menu-panel').classList.remove('hidden');
   } else {
@@ -381,7 +469,7 @@ function handleLogin() {
   const errorMsg = document.getElementById('login-error');
 
   if (alias.length < 3) {
-    errorMsg.innerText = 'El alias debe tener al menos 3 letras.';
+    errorMsg.innerText = '❌ Min 3+ chars';
     errorMsg.classList.remove('hidden');
     return;
   }
@@ -389,7 +477,16 @@ function handleLogin() {
   errorMsg.classList.add('hidden');
   currentUser = alias;
   localStorage.setItem('bolitasUser', alias);
-  document.getElementById('current-username').innerText = currentUser;
+  // document.getElementById('current-username').innerText = currentUser;
+
+  // If tutorial hasn't been done, go directly to tutorial (which starts Level 1 after)
+  if (!localStorage.getItem('bolitasTutorialDone')) {
+    currentMode = 'adventure';
+    currentLevelIndex = 0;
+    showTutorial();
+    return;
+  }
+
   document.getElementById('auth-panel').classList.add('hidden');
   document.getElementById('main-menu-panel').classList.remove('hidden');
 }
@@ -409,13 +506,13 @@ function logoutUser() {
 async function showLeaderboard() {
   document.getElementById('leaderboard-screen').classList.remove('hidden');
   const listEl = document.getElementById('leaderboard-list');
-  listEl.innerHTML = '<li>Cargando...</li>';
+  listEl.innerHTML = '<li>⏳</li>';
 
   try {
     const scores = await getLeaderboard();
     listEl.innerHTML = '';
     if (scores.length === 0) {
-      listEl.innerHTML = '<li>Aún no hay puntuaciones.</li>';
+      listEl.innerHTML = '<li>—</li>';
       return;
     }
 
@@ -425,14 +522,14 @@ async function showLeaderboard() {
         li.classList.add('highlight');
       }
       li.innerHTML = `
-        <span class="lb-rank">#${i + 1}</span>
+  < span class="lb-rank" > #${i + 1}</span >
         <span class="lb-name">${s.username}</span>
         <span class="lb-score">${s.score} pt</span>
-      `;
+`;
       listEl.appendChild(li);
     });
   } catch (e) {
-    listEl.innerHTML = '<li>Error al cargar leaderboard.</li>';
+    listEl.innerHTML = '<li>❌</li>';
     console.error(e);
   }
 }
@@ -451,6 +548,18 @@ const INACTIVITY_NOTIFICATIONS = [
   { id: 106, delayH: 168, title: 'Tiempo Extra de regalo 🎁', body: '¡Ha pasado una semana! Entra ahora y revive tu próxima partida totalmente gratis.' },
   { id: 107, delayH: 240, title: 'Alerta Máxima Nivel 100 🚨', body: 'Llevas 10 días fuera. ¡El tablero está a punto de desbordarse, entra rápido!' }
 ];
+
+// Ask for notification permission at app startup (does not schedule anything yet)
+async function requestNotificationPermission() {
+  try {
+    const permStatus = await LocalNotifications.checkPermissions();
+    if (permStatus.display !== 'granted') {
+      await LocalNotifications.requestPermissions();
+    }
+  } catch (e) {
+    console.warn('Notification permission request failed:', e);
+  }
+}
 
 async function setupInactivityNotifications() {
   try {
@@ -513,6 +622,7 @@ function startGame() {
   if (isAudioEnabled) {
     bgmAudio.play().catch(e => console.log('Autoplay prevented'));
   }
+  FirebaseAnalytics.logEvent({ name: 'level_start', params: { mode: currentMode, level: currentLevelIndex + 1 } });
   initGame();
 }
 
@@ -539,32 +649,31 @@ function initGame(isRevive = false) {
   clearInterval(timerInterval);
 
   // Configure grid based on mode
+  const leaderboardBtn = document.getElementById('show-leaderboard-btn');
+
   if (currentMode === 'adventure') {
     const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
     currentRows = config.rows;
     currentCols = config.cols;
     currentColors = config.colors;
     currentColorSet = COLORS;
-    // Update header to show level
-    document.querySelector('.score-board h2').innerHTML = `Nivel ${currentLevelIndex + 1} — <span id="score">0</span>`;
-    uiScore = document.getElementById('score');
+    uiHeaderMode.innerText = `LVL ${currentLevelIndex + 1} `;
+    leaderboardBtn.classList.add('hidden');
   } else if (currentMode === 'zen') {
     currentRows = 10;
     currentCols = 10;
     currentColorSet = ZEN_COLORS;
     currentColors = ZEN_COLORS.length;
-    // Restore header for non-adventure modes
-    document.querySelector('.score-board h2').innerHTML = `Puntos: <span id="score">0</span>`;
-    uiScore = document.getElementById('score');
+    uiHeaderMode.innerText = `🧘 Zen`;
+    leaderboardBtn.classList.add('hidden');
   } else if (currentMode === 'timeattack') {
     currentRows = 8;
     currentCols = 8;
     currentColorSet = COLORS;
-    currentColors = 5; // Time Attack: more colors for challenge
+    currentColors = 5;
     timeRemaining = isRevive ? 15 : 60;
-    // Restore header for non-adventure modes
-    document.querySelector('.score-board h2').innerHTML = `Puntos: <span id="score">0</span>`;
-    uiScore = document.getElementById('score');
+    uiHeaderMode.innerText = `⏱️ Ranking`;
+    leaderboardBtn.classList.remove('hidden');
     startTimer();
   }
 
@@ -670,6 +779,7 @@ async function handleBolitaClick(startR, startC, el) {
     // Pop animation
     const groupToPop = [...selectedGroup];
     selectedGroup = []; // clear selection
+    clearSelectionOutline();
     const currentTime = Date.now();
 
     // Play Pop Sound + Haptic feedback on mobile
@@ -709,6 +819,12 @@ async function handleBolitaClick(startR, startC, el) {
       });
       isAnimating = false;
 
+      // If tutorial is active, fire progress on pop completion
+      if (isTutorialActive) {
+        handleTutorialProgress();
+        return;
+      }
+
       // Check if the board is completely clear
       if (isBoardClear()) {
         showCelebration();
@@ -740,6 +856,7 @@ async function handleBolitaClick(startR, startC, el) {
       if (b.el) b.el.classList.remove('selected');
     });
     selectedGroup = [];
+    clearSelectionOutline();
 
     const targetColor = grid[r][c].color;
     const group = [];
@@ -767,6 +884,9 @@ async function handleBolitaClick(startR, startC, el) {
       if (isAudioEnabled) playSelectSound();
       selectedGroup = group;
       selectedGroup.forEach(b => b.el.classList.add('selected'));
+      drawSelectionOutline(selectedGroup);
+      // If tutorial is active, advance to 'pop' phase
+      if (isTutorialActive) handleTutorialProgress();
     } else {
       if (isAudioEnabled) playErrorSound();
     }
@@ -897,28 +1017,73 @@ function refillBoard() {
   }
 }
 
+// --- Selection group outline (SVG marching ants) ---
+function drawSelectionOutline(group) {
+  const svg = document.getElementById('selection-outline');
+  svg.innerHTML = '';
+  if (!group || group.length === 0) return;
+
+  const gridEl = document.getElementById('grid');
+  const cw = gridEl.offsetWidth / currentCols;
+  const ch = gridEl.offsetHeight / currentRows;
+
+  const sel = new Set(group.map(b => `${b.r},${b.c}`));
+  let pathData = '';
+
+  for (const b of group) {
+    const { r, c } = b;
+    const x = c * cw, y = r * ch;
+
+    const edges = [
+      [!sel.has(`${r - 1},${c}`), x, y, x + cw, y], // top
+      [!sel.has(`${r + 1},${c}`), x, y + ch, x + cw, y + ch], // bottom
+      [!sel.has(`${r},${c - 1}`), x, y, x, y + ch], // left
+      [!sel.has(`${r},${c + 1}`), x + cw, y, x + cw, y + ch], // right
+    ];
+
+    for (const [draw, x1, y1, x2, y2] of edges) {
+      if (!draw) continue;
+      pathData += `M ${x1} ${y1} L ${x2} ${y2} `;
+    }
+  }
+
+  if (pathData) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', pathData);
+    path.setAttribute('fill', 'none');
+    svg.appendChild(path);
+  }
+}
+
+function clearSelectionOutline() {
+  const svg = document.getElementById('selection-outline');
+  if (svg) svg.innerHTML = '';
+}
+// -------------------------------------------------------
+
+
 function calculatePoints(count) {
   if (count <= 3) return 100;
-  if (count === 4) return 250;
-  if (count === 5) return 400;
-  if (count === 6) return 750;
-  return 1000;
+  if (count === 4) return 300;
+  if (count === 5) return 600;
+  if (count === 6) return 1200;
+  return 2000;
 }
 
 function updateScore(points) {
   score += points;
   if (currentMode === 'timeattack') {
-    uiScore.innerText = `${score} (⏱️${timeRemaining}s)`;
+    uiHeaderScoreDetails.innerText = `⭐ ${score} ⏱️ ${timeRemaining}`;
   } else if (currentMode === 'adventure') {
     const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
-    uiScore.innerText = `${score} / ${config.target}`;
+    uiHeaderScoreDetails.innerText = `⭐ ${score} / ${config.target}`;
     // Show pass-level button when target is reached
     if (score >= config.target && !levelCompleted) {
       levelCompleted = true;
       document.getElementById('pass-level-btn').classList.remove('hidden');
     }
   } else {
-    uiScore.innerText = score;
+    uiHeaderScoreDetails.innerText = `⭐ ${score}`;
   }
 }
 
@@ -931,51 +1096,51 @@ function updateModeButtons() {
   // Time Attack (Level 30+)
   if (lvl >= 30) {
     taBtn.classList.remove('locked-mode');
-    taBtn.querySelector('small').textContent = '8x8 - ¡Compite en la clasificación!';
+    taBtn.querySelector('small').textContent = '8×8 🏆';
     if (!localStorage.getItem('alerted_timeattack_30')) {
       localStorage.setItem('alerted_timeattack_30', 'true');
-      document.getElementById('unlocked-mode-name').innerText = "Contrarreloj";
-      document.getElementById('unlocked-mode-desc').innerText = "¡Compite en la clasificación mundial de 8x8!";
+      document.getElementById('unlocked-mode-name').innerText = "⏱️";
+      document.getElementById('unlocked-mode-desc').innerText = "8×8 🏆";
       document.getElementById('mode-unlocked-screen').classList.remove('hidden');
     }
 
     // Add glow and badge if unlocked but not played yet
     if (!localStorage.getItem('hasPlayedTimeAttack')) {
       taBtn.classList.add('new-mode-glow');
-      taBtn.querySelector('span').innerHTML = 'Contrarreloj <span class="new-badge">¡Nuevo!</span>';
+      taBtn.querySelector('span').innerHTML = '⏱️ Ranking <span class="new-badge">🆕</span>';
     } else {
       taBtn.classList.remove('new-mode-glow');
-      taBtn.querySelector('span').innerHTML = 'Contrarreloj';
+      taBtn.querySelector('span').innerHTML = '⏱️ Ranking';
     }
   } else {
     taBtn.classList.add('locked-mode');
-    taBtn.querySelector('span').innerHTML = 'Contrarreloj 🔒';
-    taBtn.querySelector('small').textContent = '🔒 Se desbloquea en el Nivel 30';
+    taBtn.querySelector('span').innerHTML = '⏱️ Ranking 🔒';
+    taBtn.querySelector('small').textContent = '🔒 30';
     taBtn.classList.remove('new-mode-glow');
   }
 
   // Zen Mode (Level 50+)
   if (lvl >= 50) {
     zenBtn.classList.remove('locked-mode');
-    zenBtn.querySelector('small').textContent = '10x10 - Juega sin límite de tiempo';
+    zenBtn.querySelector('small').textContent = '10×10 ∞';
     if (!localStorage.getItem('alerted_zen_50')) {
       localStorage.setItem('alerted_zen_50', 'true');
-      document.getElementById('unlocked-mode-name').innerText = "Modo Zen";
-      document.getElementById('unlocked-mode-desc').innerText = "Juega de forma relajada y gana fondos para revivir.";
+      document.getElementById('unlocked-mode-name').innerText = "🧘";
+      document.getElementById('unlocked-mode-desc').innerText = "∞";
       document.getElementById('mode-unlocked-screen').classList.remove('hidden');
     }
 
     if (!localStorage.getItem('hasPlayedZen')) {
       zenBtn.classList.add('new-mode-glow');
-      zenBtn.querySelector('span').innerHTML = 'Modo Zen <span class="new-badge">¡Nuevo!</span>';
+      zenBtn.querySelector('span').innerHTML = '🧘 Zen <span class="new-badge">🆕</span>';
     } else {
       zenBtn.classList.remove('new-mode-glow');
-      zenBtn.querySelector('span').innerHTML = 'Modo Zen';
+      zenBtn.querySelector('span').innerHTML = '🧘 Zen';
     }
   } else {
     zenBtn.classList.add('locked-mode');
-    zenBtn.querySelector('span').innerHTML = 'Modo Zen 🔒';
-    zenBtn.querySelector('small').textContent = '🔒 Se desbloquea en el Nivel 50';
+    zenBtn.querySelector('span').innerHTML = '🧘 Zen 🔒';
+    zenBtn.querySelector('small').textContent = '🔒 50';
     zenBtn.classList.remove('new-mode-glow');
   }
 }
@@ -999,13 +1164,13 @@ function countValidGroups() {
 
       const targetColor = grid[r][c].color;
       const groupSize = [];
-
       const queue = [{ r, c }];
+      let qIdx = 0;
       const localVisited = new Set();
       localVisited.add(key);
 
-      while (queue.length > 0) {
-        const curr = queue.shift();
+      while (qIdx < queue.length) {
+        const curr = queue[qIdx++];
         groupSize.push(curr);
         visited.add(`${curr.r},${curr.c}`);
 
@@ -1017,9 +1182,9 @@ function countValidGroups() {
         ];
 
         for (const n of neighbors) {
-          if (n.r >= 0 && n.r < currentRows && n.c >= 0 && n.c < currentCols) {
+          if (n.r >= 0 && n.r < currentRows && n.c >= 0 && n.c < currentCols && grid[n.r][n.c] && grid[n.r][n.c].color === targetColor) {
             const nKey = `${n.r},${n.c}`;
-            if (!localVisited.has(nKey) && grid[n.r][n.c] && grid[n.r][n.c].color === targetColor) {
+            if (!localVisited.has(nKey)) {
               localVisited.add(nKey);
               queue.push(n);
             }
@@ -1033,7 +1198,6 @@ function countValidGroups() {
       }
     }
   }
-
   return count;
 }
 
@@ -1118,26 +1282,31 @@ async function showGameOver(timeout = false) {
 
   const title = document.querySelector('#game-over h2');
   if (timeout) {
-    title.innerText = "¡Tiempo Terminado!";
+    title.innerText = "⏱️ Time up!";
   } else {
-    title.innerText = "¡Sin movimientos!";
+    title.innerText = "🚫 You lose";
   }
 
   document.getElementById('final-score').innerText = score;
   if (currentMode === 'adventure' && !timeout) {
-    document.getElementById('play-again-btn').innerText = "Reintentar";
+    document.getElementById('play-again-btn').innerText = "🔄 Retry";
     document.getElementById('play-again-btn').dataset.action = 'retry';
 
     // Track failures for dynamic difficulty
     let fails = parseInt(localStorage.getItem('bolitasLevelFails') || '0');
     localStorage.setItem('bolitasLevelFails', fails + 1);
   } else {
-    document.getElementById('play-again-btn').innerText = "Menú Principal";
+    document.getElementById('play-again-btn').innerText = "🏠";
     document.getElementById('play-again-btn').dataset.action = 'menu';
   }
 
   const reviveBtn = document.getElementById('revive-btn');
   if ((currentMode === 'timeattack' || currentMode === 'adventure') && !hasUsedRevive && score > 0) {
+    if (currentMode === 'timeattack') {
+      reviveBtn.innerText = "🎥 AD +15s";
+    } else {
+      reviveBtn.innerText = "🎥 AD Continue";
+    }
     reviveBtn.classList.remove('hidden');
     prepareRewarded(); // pre-load in background
   } else {
@@ -1145,6 +1314,16 @@ async function showGameOver(timeout = false) {
   }
 
   document.getElementById('game-over').classList.remove('hidden');
+
+  FirebaseAnalytics.logEvent({
+    name: 'game_over',
+    params: {
+      mode: currentMode,
+      level: currentLevelIndex + 1,
+      score: score,
+      timeout: timeout
+    }
+  });
 
   // Show interstitial immediately for modes that don't have a rewarded button flow
   // (Zen never has the revive btn, so show interstitial now)
@@ -1168,12 +1347,22 @@ function handleLevelComplete() {
   currentLevelIndex++;
   localStorage.setItem('bolitasLevel', currentLevelIndex);
   localStorage.removeItem('bolitasLevelFails'); // Reset fails on success
+
+  FirebaseAnalytics.logEvent({
+    name: 'level_complete',
+    params: {
+      mode: 'adventure',
+      level: currentLevelIndex // This is the level that was just completed
+    }
+  });
+
   updateModeButtons();
 
   const title = document.querySelector('#game-over h2');
-  title.innerText = `¡Nivel ${currentLevelIndex} Completado!`;
+  const WIN_TITLES = ['Great! 🎉', 'WOW! 🔥', 'Winner! 🏆', 'Amazing! ⚡', 'Brilliant! ✨', 'Nailed it! 💥'];
+  title.innerText = WIN_TITLES[Math.floor(Math.random() * WIN_TITLES.length)];
   document.getElementById('final-score').innerText = score;
-  document.getElementById('play-again-btn').innerText = "Siguiente Nivel";
+  document.getElementById('play-again-btn').innerText = "▶️ Next LVL";
   document.getElementById('play-again-btn').dataset.action = 'next';
   document.getElementById('revive-btn').classList.add('hidden');
   document.getElementById('game-over').classList.remove('hidden');
@@ -1222,54 +1411,124 @@ function showCelebration() {
   }
 }
 
-// Tutorial system
-function showTutorial() {
-  const totalSteps = 3;
-  let currentStep = 1;
+// Tutorial system — interactive mini-level
+let isTutorialActive = false;
+let tutorialPhase = 'select'; // 'select' | 'pop'
 
+function positionTutorialHand(targetEl) {
+  const hand = document.getElementById('tutorial-hand');
   const screen = document.getElementById('tutorial-screen');
-  const btn = document.getElementById('tutorial-next-btn');
-  const dotsContainer = document.getElementById('tutorial-dots');
+  const containerRect = document.getElementById('game-container').getBoundingClientRect();
+  const targetRect = targetEl.getBoundingClientRect();
 
-  // Create dots
-  dotsContainer.innerHTML = '';
-  for (let i = 1; i <= totalSteps; i++) {
-    const dot = document.createElement('span');
-    dot.className = `tutorial-dot${i === 1 ? ' active' : ''}`;
-    dotsContainer.appendChild(dot);
+  // Center the hand over the target bolita
+  const left = (targetRect.left - containerRect.left) + targetRect.width / 2;
+  const top = (targetRect.top - containerRect.top) + targetRect.height / 2;
+
+  hand.style.left = `${left}px`;
+  hand.style.top = `${top}px`;
+  hand.style.transform = 'translate(-50%, -70%)';
+  hand.style.display = 'block';
+
+  screen.classList.remove('hidden');
+}
+
+function hideTutorialHand() {
+  document.getElementById('tutorial-hand').style.display = 'none';
+  document.getElementById('tutorial-screen').classList.add('hidden');
+}
+
+function showTutorial() {
+  isTutorialActive = true;
+  tutorialPhase = 'select';
+
+  // Hide main menu, show game UI
+  document.getElementById('login-screen').classList.add('hidden');
+  if (isAudioEnabled) {
+    bgmAudio.play().catch(e => console.log('Autoplay prevented'));
   }
 
-  // Show first step
-  document.querySelectorAll('.tutorial-step').forEach(s => s.classList.add('hidden'));
-  document.querySelector('.tutorial-step[data-step="1"]').classList.remove('hidden');
-  btn.innerText = 'Siguiente';
-  screen.classList.remove('hidden');
+  // Set up a 3x3 grid
+  currentMode = 'adventure';
+  currentRows = 3;
+  currentCols = 3;
+  currentColorSet = COLORS;
+  score = 0;
+  selectedGroup = [];
+  isAnimating = false;
+  hintedElements = [];
 
-  // Remove old listeners by cloning
-  const newBtn = btn.cloneNode(true);
-  btn.parentNode.replaceChild(newBtn, btn);
+  // Update header
+  uiHeaderMode.innerText = `📚 Tutorial`;
+  uiHeaderScoreDetails.innerText = `Learn the basics`;
 
-  newBtn.addEventListener('click', () => {
-    if (currentStep < totalSteps) {
-      // Hide current, show next
-      document.querySelector(`.tutorial-step[data-step="${currentStep}"]`).classList.add('hidden');
-      currentStep++;
-      document.querySelector(`.tutorial-step[data-step="${currentStep}"]`).classList.remove('hidden');
+  document.getElementById('game-over').classList.add('hidden');
+  document.getElementById('pass-level-btn').classList.add('hidden');
+  showBannerAd();
+  uiGrid.innerHTML = '';
 
-      // Update dots
-      dotsContainer.querySelectorAll('.tutorial-dot').forEach((d, i) => {
-        d.classList.toggle('active', i + 1 === currentStep);
-      });
+  // Set CSS variables
+  document.documentElement.style.setProperty('--rows', currentRows);
+  document.documentElement.style.setProperty('--cols', currentCols);
+  uiGrid.style.aspectRatio = `${currentCols} / ${currentRows}`;
 
-      // Last step: change button text
-      if (currentStep === totalSteps) {
-        newBtn.innerText = '¡A Jugar!';
+  // Build 3x3 grid
+  // L-shape green: (0,0), (1,0), (1,1)
+  // Fixed fillers — no groups of 3 possible
+  grid = Array.from({ length: currentRows }, () => new Array(currentCols).fill(null));
+
+  const greenPos = new Set(['0,0', '1,0', '1,1']);
+  const fillerLayout = [
+    [null, 'red', 'blue'],
+    [null, null, 'red'],
+    ['blue', 'red', 'blue'],
+  ];
+
+  for (let r = 0; r < currentRows; r++) {
+    for (let c = 0; c < currentCols; c++) {
+      if (greenPos.has(`${r},${c}`)) {
+        createBolita(r, c, 'green');
+      } else {
+        createBolita(r, c, fillerLayout[r][c]);
       }
-    } else {
-      // Tutorial complete
-      localStorage.setItem('bolitasTutorialDone', 'true');
-      screen.classList.add('hidden');
-      startGame(); // Now actually start the game
+    }
+  }
+
+  // Apply pulsing hint to green balls
+  greenPos.forEach(key => {
+    const [r, c] = key.split(',').map(Number);
+    if (grid[r][c] && grid[r][c].el) {
+      grid[r][c].el.classList.add('hint');
+      hintedElements.push(grid[r][c].el);
     }
   });
+
+  // Show step 1 instruction
+  // Point at the middle green bolita (1,0)
+  positionTutorialHand(grid[1][0].el);
+}
+
+// Called from handleBolitaClick when tutorial is active
+function handleTutorialProgress() {
+  if (tutorialPhase === 'select') {
+    // Green group was just selected — advance to pop phase
+    tutorialPhase = 'pop';
+    // Hand stays in place — user needs to tap same group again to pop it
+  } else if (tutorialPhase === 'pop') {
+    // Green group was just popped — tutorial complete
+    isTutorialActive = false;
+    hideTutorialHand();
+    document.getElementById('tutorial-text').classList.add('hidden');
+    localStorage.setItem('bolitasTutorialDone', 'true');
+
+    // Restore footer text
+    document.querySelector('footer').innerHTML =
+      '<p>🔵🔴🟢 × 3+</p>';
+
+    // Start Level 1 after pop animation finishes
+    setTimeout(() => {
+      currentLevelIndex = 0;
+      startGame();
+    }, 700);
+  }
 }

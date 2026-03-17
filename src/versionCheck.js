@@ -17,17 +17,22 @@ function compareVersions(v1, v2) {
 
 export async function checkAppVersion() {
     // Only run on native devices
-    if (!Capacitor.isNativePlatform()) return;
+    if (!Capacitor.isNativePlatform()) return false;
 
     try {
-        // 1. Fetch Remote Config
-        await FirebaseRemoteConfig.fetchAndActivate();
+        // 1. Fetch Remote Config with a safety timeout (5 seconds)
+        const fetchPromise = FirebaseRemoteConfig.fetchAndActivate();
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Remote Config timeout')), 5000)
+        );
+
+        await Promise.race([fetchPromise, timeoutPromise]);
 
         // 2. Get the minimum required version from Remote Config
         const { value } = await FirebaseRemoteConfig.getString({ key: 'minimum_version_required' });
 
         // If not set, we assume no restriction
-        if (!value || value === '') return;
+        if (!value || value === '') return false;
 
         // 3. Get the current app version
         const info = await App.getInfo();
@@ -37,10 +42,12 @@ export async function checkAppVersion() {
         if (compareVersions(currentVersion, value) < 0) {
             // Current version is less than required minimum version
             showUpdateScreen();
+            return true; // Update is required and blocked
         }
     } catch (error) {
         console.error("Error checking app version:", error);
     }
+    return false; // No update required or check failed (fail open)
 }
 
 function showUpdateScreen() {

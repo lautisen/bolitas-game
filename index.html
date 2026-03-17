@@ -16,32 +16,31 @@
 <body>
   <div id="game-container">
     <header>
-      <div class="header-top">
-        <div class="user-info">
-          <span id="current-username">Invitado</span>
+      <div class="header-content">
+        <div class="header-left">
+          <h2 id="header-mode-display">LVL 1</h2>
+          <div id="header-score-details" class="score-subtext">0 / 0</div>
         </div>
-        <div class="header-buttons">
+        <div class="header-right">
+          <button id="back-to-menu-btn" class="glass-btn small-btn" title="Menu">🏠</button>
           <button id="settings-btn" class="glass-btn small-btn">⚙️</button>
-          <button id="show-leaderboard-btn" class="glass-btn small-btn">🏆</button>
+          <button id="show-leaderboard-btn" class="glass-btn small-btn hidden">�</button>
         </div>
       </div>
-      <div class="score-board">
-        <h2>Puntos: <span id="score">0</span></h2>
-        <div class="header-buttons">
-          <button id="back-to-menu-btn" class="glass-btn small-btn" title="Volver al menú">🏠</button>
-          <button id="restart-btn" class="glass-btn small-btn" title="Reiniciar">🔄</button>
-        </div>
-      </div>
-      <button id="pass-level-btn" class="glass-btn pass-level-btn hidden">✨ ¡Puntuación alcanzada! Pasar nivel
-        ✨</button>
+      <button id="pass-level-btn" class="glass-btn pass-level-btn hidden">✨ Next LVL ✨</button>
     </header>
 
+    <div id="tutorial-text" class="hidden"></div>
+
     <div class="game-area">
-      <div id="grid"></div>
+      <div id="grid">
+        <svg id="selection-outline"
+          style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;overflow:visible;"></svg>
+      </div>
     </div>
 
     <footer>
-      <p>Toca grupos de <strong>3 o más</strong> bolitas del mismo color para eliminarlas.</p>
+      <p>🟢🟢🟢 / 🔵🔵🔵 / 🔴🔴🔴 &nbsp; 3+</p>
     </footer>
   </div>
 
@@ -50,10 +49,10 @@
   <div id="login-screen" class="overlay">
     <div class="glass-panel" id="auth-panel">
       <h2 class="title-logo">Gloop</h2>
-      <p>¿Con qué nombre quieres jugar?</p>
-      <input type="text" id="username-input" class="glass-input" placeholder="Tu alias..." autocomplete="off" />
-      <button id="login-btn" class="glass-btn primary">Entrar a Jugar</button>
-      <p class="error-msg hidden" id="login-error">Introduce un alias para continuar</p>
+      <p>👤</p>
+      <input type="text" id="username-input" class="glass-input" placeholder="✏️ Alias" autocomplete="off" />
+      <button id="login-btn" class="glass-btn primary">▶️ Play</button>
+      <p class="error-msg hidden" id="login-error">❌ Min 3+ chars</p>
       <div class="overlay-footer-buttons">
         <button class="glass-btn small-btn overlay-settings-btn">⚙️</button>
         <button class="glass-btn small-btn overlay-leaderboard-btn">🏆</button>
@@ -61,23 +60,23 @@
     </div>
 
     <div class="glass-panel hidden" id="main-menu-panel">
-      <h2 class="title-logo">Modos de Juego</h2>
+      <h2 class="title-logo">Gloop</h2>
       <div class="menu-buttons">
         <button id="mode-levels-btn" class="glass-btn primary mode-btn">
-          <span>Aventura (Niveles)</span>
-          <small>Nivel <span id="current-level-display">1</span> - Misiones únicas</small>
+          <span>🗺️ Career</span>
+          <small>LVL <span id="current-level-display">1</span></small>
         </button>
         <button id="mode-zen-btn" class="glass-btn mode-btn">
-          <span>Modo Zen</span>
-          <small>10x10 - Juega sin límite de tiempo</small>
+          <span>🧘 Zen</span>
+          <small>∞</small>
         </button>
         <button id="mode-timeattack-btn" class="glass-btn mode-btn">
-          <span>Contrarreloj</span>
-          <small>8x8 - ¡Compite en la clasificación!</small>
+          <span>⏱️ Ranking</span>
+          <small>🏆</small>
         </button>
       </div>
       <div class="overlay-footer-buttons">
-        <button id="logout-btn" class="text-btn">Cambiar Usuario</button>
+        <button id="logout-btn" class="text-btn">🔄 Logout</button>
         <div class="overlay-footer-icons">
           <button class="glass-btn small-btn overlay-settings-btn">⚙️</button>
           <button class="glass-btn small-btn overlay-leaderboard-btn">🏆</button>
@@ -89,32 +88,32 @@
   <!-- Settings Screen -->
   <div id="settings-screen" class="overlay hidden">
     <div class="glass-panel settings-panel">
-      <h2>Ajustes ⚙️</h2>
+      <h2>⚙️</h2>
       <div class="settings-options">
         <label class="setting-item">
-          <span>Música y Sonidos</span>
+          <span>🔊 SFX/Music</span>
           <input type="checkbox" id="audio-toggle" checked>
         </label>
         <label class="setting-item">
-          <span>Modo Daltónico</span>
+          <span>👁️ Color help</span>
           <input type="checkbox" id="colorblind-toggle">
         </label>
       </div>
-      <button id="close-settings-btn" class="glass-btn primary mt-3">Guardar</button>
-      <button id="logout-settings-btn" class="text-btn mt-3">Cerrar sesión</button>
+      <button id="close-settings-btn" class="glass-btn primary mt-3" style="width: 100%;">✅ Save</button>
+      <button id="exit-settings-btn" class="text-btn mt-3" style="width: 100%;">🚪 Exit</button>
     </div>
   </div>
 
   <!-- Leaderboard Screen -->
   <div id="leaderboard-screen" class="overlay hidden">
     <div class="glass-panel leaderboard-panel">
-      <h2>Mejores Jugadores 🏆</h2>
+      <h2>🏆</h2>
       <div class="leaderboard-list-container">
         <ul id="leaderboard-list">
-          <li>Cargando...</li>
+          <li>⏳</li>
         </ul>
       </div>
-      <button id="close-leaderboard-btn" class="glass-btn primary">Cerrar</button>
+      <button id="close-leaderboard-btn" class="glass-btn primary">✖</button>
     </div>
   </div>
 
@@ -122,31 +121,31 @@
   <div id="clear-celebration" class="overlay hidden">
     <div id="confetti-container"></div>
     <div class="glass-panel celebration-panel">
-      <h2 class="celebration-title">🎉 ¡Enhorabuena! 🎉</h2>
-      <p class="celebration-subtitle">¡Has eliminado todas las bolitas!</p>
-      <p>Puntuación: <span id="celebration-score">0</span></p>
-      <button id="celebration-continue-btn" class="glass-btn primary">Continuar</button>
+      <h2 class="celebration-title">🎉</h2>
+      <p class="celebration-subtitle">⭐⭐⭐</p>
+      <p>⭐ <span id="celebration-score">0</span></p>
+      <button id="celebration-continue-btn" class="glass-btn primary">▶️</button>
     </div>
   </div>
 
   <!-- Reward Ready Screen -->
   <div id="reward-ready-screen" class="overlay hidden">
     <div class="glass-panel">
-      <h2>¡Recompensa Obtenida!</h2>
-      <p id="reward-ready-text">El tablero se ha rellenado.<br>¡Tienes 15 segundos extra!</p>
+      <h2>🎁</h2>
+      <p id="reward-ready-text"></p>
       <button id="reward-continue-btn" class="glass-btn primary"
-        style="background: var(--clr-green); width: 100%; margin-top: 1rem;">Continuar Jugando</button>
+        style="background: var(--clr-green); width: 100%; margin-top: 1rem;">▶️ Continue</button>
     </div>
   </div>
 
   <!-- Game Over Screen -->
   <div id="game-over" class="overlay hidden">
     <div class="glass-panel">
-      <h2>¡Sin movimientos!</h2>
-      <p>Puntuación final: <span id="final-score">0</span></p>
+      <h2>🚫</h2>
+      <p>⭐ <span id="final-score">0</span></p>
       <button id="revive-btn" class="glass-btn primary hidden"
-        style="background: var(--clr-orange); margin-bottom: 0.5rem; width: 100%;">🎥 Revivir (+15s)</button>
-      <button id="play-again-btn" class="glass-btn primary">Menú Principal</button>
+        style="background: var(--clr-orange); margin-bottom: 0.5rem; width: 100%;">🎥 +15s</button>
+      <button id="play-again-btn" class="glass-btn primary">🏠</button>
       <div class="overlay-footer-buttons">
         <button class="glass-btn small-btn overlay-settings-btn">⚙️</button>
         <button class="glass-btn small-btn overlay-leaderboard-btn">🏆</button>
@@ -157,74 +156,15 @@
   <!-- Mode Unlocked Screen -->
   <div id="mode-unlocked-screen" class="overlay hidden" style="z-index: 600;">
     <div class="glass-panel celebration-panel">
-      <h2 class="celebration-title">✨ ¡Nuevo Modo! ✨</h2>
-      <p class="celebration-subtitle" id="unlocked-mode-name">Contrarreloj</p>
-      <p id="unlocked-mode-desc">¡Compite en la clasificación de 8x8!</p>
-      <button id="unlocked-continue-btn" class="glass-btn primary">¡Genial!</button>
+      <h2 class="celebration-title">🔓 ✨</h2>
+      <p class="celebration-subtitle" id="unlocked-mode-name">⏱️</p>
+      <p id="unlocked-mode-desc">8×8 🏆</p>
+      <button id="unlocked-continue-btn" class="glass-btn primary">🎉</button>
     </div>
   </div>
-  <!-- Tutorial Overlay -->
-  <div id="tutorial-screen" class="overlay hidden">
-    <div class="glass-panel tutorial-panel">
-      <div class="tutorial-step" data-step="1">
-        <h2>👆 Paso 1: Selecciona</h2>
-        <div class="tutorial-demo">
-          <div class="tutorial-grid">
-            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-red)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
-            <div class="tutorial-ball highlighted" style="background:var(--clr-green)"></div>
-            <div class="tutorial-ball highlighted" style="background:var(--clr-green)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-red)"></div>
-            <div class="tutorial-ball highlighted" style="background:var(--clr-green)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-yellow)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
-          </div>
-        </div>
-        <p>Toca un grupo de <strong>3 o más</strong> bolitas del mismo color para seleccionarlas.</p>
-      </div>
-
-      <div class="tutorial-step hidden" data-step="2">
-        <h2>👆👆 Paso 2: Elimina</h2>
-        <div class="tutorial-demo">
-          <div class="tutorial-grid">
-            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-red)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
-            <div class="tutorial-ball selected-demo" style="background:var(--clr-green)"></div>
-            <div class="tutorial-ball selected-demo" style="background:var(--clr-green)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-red)"></div>
-            <div class="tutorial-ball selected-demo" style="background:var(--clr-green)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-yellow)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
-          </div>
-        </div>
-        <p>Toca <strong>de nuevo</strong> el grupo seleccionado para eliminarlo y sumar puntos.</p>
-      </div>
-
-      <div class="tutorial-step hidden" data-step="3">
-        <h2>⬇️ Paso 3: Gravedad</h2>
-        <div class="tutorial-demo">
-          <div class="tutorial-grid">
-            <div class="tutorial-ball empty-demo"></div>
-            <div class="tutorial-ball empty-demo"></div>
-            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
-            <div class="tutorial-ball falling-demo" style="background:var(--clr-blue)"></div>
-            <div class="tutorial-ball falling-demo" style="background:var(--clr-red)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-red)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-yellow)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-yellow)"></div>
-            <div class="tutorial-ball" style="background:var(--clr-blue)"></div>
-          </div>
-        </div>
-        <p>Las bolitas caen por gravedad para rellenar los huecos. ¡Encadena combos para más puntos!</p>
-      </div>
-
-      <div class="tutorial-nav">
-        <span id="tutorial-dots"></span>
-        <button id="tutorial-next-btn" class="glass-btn primary">Siguiente</button>
-      </div>
-    </div>
+  <div id="tutorial-screen" class="overlay hidden"
+    style="background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; pointer-events: none; z-index: 150;">
+    <div id="tutorial-hand">👆</div>
   </div>
 
   <!-- Update Required Screen -->
@@ -233,6 +173,25 @@
       <h2 style="color: var(--clr-red);">¡Actualización Necesaria!</h2>
       <p style="margin: 20px 0;">Hay una nueva versión de Gloop disponible. Debes actualizar para seguir jugando.</p>
       <button id="download-update-btn" class="glass-btn primary" style="width: 100%;">Descargar Actualización</button>
+    </div>
+  </div>
+
+  <!-- Ad Loading Screen -->
+  <div id="ad-loading-screen" class="overlay hidden" style="z-index: 10000; background: rgba(0,0,0,0.95);">
+    <div class="glass-panel" style="max-width: 90%; padding: 2rem;">
+      <div class="loader-spinner"></div>
+      <div id="ad-loading-messages" style="margin-top: 20px; font-size: 1.1rem; line-height: 1.5;">
+        <p style="margin-bottom: 10px;">🇪🇸 Los anuncios nos ayudan a mejorar y mantener la aplicación ¡gracias por
+          jugar!</p>
+        <p style="margin-bottom: 10px;">🇬🇧 Ads help us improve and maintain the app thanks for playing!</p>
+        <p style="margin-bottom: 10px;">🇫🇷 Les publicités nous aident à améliorer et à maintenir l'application, merci
+          de jouer !</p>
+        <p style="margin-bottom: 10px;">🇮🇹 Gli annunci ci aiutano a migliorare e mantenere l'app grazie per aver
+          giocato!</p>
+        <p style="margin-bottom: 10px;">🇩🇪 Anzeigen helfen uns, die App zu verbessern und zu warten. Vielen Dank fürs
+          Spielen!</p>
+        <p style="margin-bottom: 0;">🇨🇳 广告帮助我们改进和维护应用程序，感谢您的参与！</p>
+      </div>
     </div>
   </div>
 
