@@ -1,10 +1,35 @@
 import './style.css';
-import { saveScore, getLeaderboard } from './firebase.js';
-import { playSelectSound, playPopSound, playErrorSound, playGameOverSound } from './audio.js';
+import analyticsManager from './analyticsManager.js';
+import { getLevelData, getBlockForLevel, generateBiomeBlock, getVisibleBiomeRange, isBiomeRevealed, getBaseBiomeCount, BASE_BIOMES } from './biomes.js';
+import { playSelectSound, playPopSound, playErrorSound, playGameOverSound, playWinSound, playUnlockSound, playCoinSound, playLevelUnlockSound } from './audio.js';
 import { checkAppVersion } from './versionCheck.js';
 import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
+import { App } from '@capacitor/app';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { FirebaseAnalytics } from '@capacitor-firebase/analytics';
+import { FirebaseCrashlytics } from '@capacitor-firebase/crashlytics';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { initShop, openShop, renderShopItems, updateShopNotifications } from './shop.js';
+import {
+  getCoins, addCoins, spendCoins, COIN_REWARDS,
+  getXP, getPlayerLevel, getXPForNextLevel, getXPProgress, addXP,
+  getDailyQuests, swapQuest, claimQuest, QUEST_SWAP_COST,
+  getWeeklyQuests, claimWeeklyQuest, swapWeeklyQuest,
+  hasClaimableQuests, hasClaimableDailyQuests, hasClaimableWeeklyQuests, getNextDailyReset, getNextWeeklyReset,
+  SHOP_BOOSTERS,
+  getBoosterCount, buyBooster, useBooster, addBoosterFree,
+  getXPToNextReward,
+  trackPop, trackLevelComplete, trackBoardClear, trackScore,
+  trackSingleGameScore, trackGamePlayed, trackModeScore,
+} from './economy.js';
+import { t, updateLanguageUI, setLanguage, getLanguage } from './translations.js';
+import { getLives, useLife, addLife, getRemainingTime, checkAndRefill, getFullRestoreTime } from './livesManager.js';
+import { 
+  isTutorialActive, setTutorialActive, abortActiveTutorial,
+  checkBoosterTutorial, showAdventureTutorial, checkShopReminderTutorial,
+  handleTutorialProgress, positionTutorialHand, hideTutorialHand 
+} from './tutorial.js';
+import { initDailySpin, openDailySpinModal, canSpinToday, closeDailySpinModal } from './dailySpin.js';
 
 
 const bgmAudio = new Audio('./assets/bgm.mp3');
@@ -13,34 +38,25 @@ bgmAudio.volume = 0.4;
 
 const COLS = 10;
 const ROWS = 12;
+let prestartAdsThisTry = 0;
 const MIN_GROUP = 3;
 // Colors ordered by visual distinctiveness — levels using fewer colors get the first N entries
-const COLORS = ['red', 'blue', 'green', 'cyan', 'yellow', 'pink'];
-const ZEN_COLORS = ['red', 'green', 'purple', 'yellow', 'cyan']; // Fixed Zen palette
+const COLORS = ['red', 'blue', 'yellow', 'green', 'pink', 'cyan'];
+// AdMob Banner ID
+const BANNER_ID = 'ca-app-pub-3539090903954344/8982185366';
 
-// Generate 100 levels with gradual difficulty curve
-function generateLevels() {
-  const levels = [];
-  for (let i = 0; i < 100; i++) {
-    const level = i + 1;
-    // Rows/Cols: start at 5x5, grow gradually to 12x12
-    const size = Math.min(12, 5 + Math.floor(i / 8));
-    // Colors: start at 3, increase slowly
-    let colors;
-    if (level <= 5) colors = 3;
-    else if (level <= 15) colors = 4;
-    else if (level <= 35) colors = 5;
-    else colors = 6;
-    // Target score: gradual curve
-    // Target score: gradual curve, rounded to the nearest 100
-    const target = Math.round((100 + (i * 80) + (Math.pow(i, 1.3) * 10)) / 100) * 100;
-    levels.push({ target, rows: size, cols: size, colors });
+// Level data is now generated dynamically from biomes.js
+// Use getLevelData(globalLevel) for any level (1-indexed, infinite)
+function getCurrentLevelConfig() {
+  const globalLevel = currentLevelIndex + 1;
+  const data = getLevelData(globalLevel);
+  if (!data) {
+    console.error("CRITICAL: No level data found for level", globalLevel);
   }
-  return levels;
+  return data;
 }
-const LEVELS = generateLevels();
 
-let currentMode = 'adventure'; // 'adventure', 'zen', 'timeattack'
+let currentMode = 'adventure'; // Only 'adventure' mode remains
 let currentLevelIndex = 0;
 let timeRemaining = 0;
 let timerInterval = null;
@@ -70,30 +86,56 @@ let hasUsedRevive = false;
 let isBannerCreated = false;
 let isAdLoading = false;
 let levelCompleted = false;
+let activePowerup = null;
+let boostersUsedInLevel = {};
+let lastAdTimestamp = Date.now();
 
 // Performance: O(1) element-to-position lookup instead of O(rows*cols) scan
-const elementPositionMap = new WeakMap();
+let elementPositionMap = new WeakMap();
 // Performance: track hinted elements to avoid querySelectorAll
 let hintedElements = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
-  uiHeaderMode = document.getElementById('header-mode-display');
+  try {
+    uiHeaderMode = document.getElementById('header-mode-display');
   uiHeaderScoreDetails = document.getElementById('header-score-details');
   uiGrid = document.getElementById('grid');
+  const gameArea = document.querySelector('.game-area');
+  if (gameArea) {
+    new ResizeObserver(sizeGrid).observe(gameArea);
+  } else {
+    console.warn('[Main] .game-area not found during initialization');
+  }
+
+  // Initialize i18n and UI basics early
+  updateLanguageUI();
+  updateConfirmationHints();
+  updateLangButtons();
+
+  // Initialize Crashlytics
+  FirebaseCrashlytics.setEnabled({ enabled: true }).catch(() => {});
 
   // Check for updates - Wait for it to complete
   const isUpdateRequired = await checkAppVersion();
 
   // Log app open
-  FirebaseAnalytics.logEvent({ name: 'app_open', params: {} });
+  analyticsManager.logCustomEvent(analyticsManager.Events.APP_OPEN);
 
   if (isUpdateRequired) {
-    console.log('App update required. Stopping initialization.');
+    console.log('[Main] App update required. Stopping initialization.');
     return;
   }
 
   // Ask for notification permission early, before the user starts playing
   requestNotificationPermission();
+
+  // Configure Status Bar — let the OS handle text contrast automatically
+  try {
+    StatusBar.setStyle({ style: Style.Default });
+    StatusBar.setOverlaysWebView({ overlay: false });
+  } catch (e) {
+    console.warn('StatusBar not available', e);
+  }
 
   // UI Handlers
 
@@ -103,21 +145,103 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('play-again-btn').addEventListener('click', () => {
     const btn = document.getElementById('play-again-btn');
-    if (btn.dataset.action === 'retry' || btn.dataset.action === 'next') {
+    if (btn.dataset.action === 'retry') {
+      useLife();
+      updateLivesUI();
+      analyticsManager.logCustomEvent(analyticsManager.Events.LEVEL_RETRY, {
+        [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+      });
+      document.getElementById('game-over').classList.add('hidden');
+      showLevelPreStartScreen(currentLevelIndex);
+    } else if (btn.dataset.action === 'next') {
       initGame();
     } else {
       returnToMainMenu();
     }
   });
   document.getElementById('reward-continue-btn').addEventListener('click', () => {
-    document.getElementById('reward-ready-screen').classList.add('hidden');
-    initGame(true);
+    const screen = document.getElementById('reward-ready-screen');
+    const shouldRevive = screen.dataset.revive === 'true';
+    screen.dataset.revive = 'false';
+    screen.classList.add('hidden');
+    if (shouldRevive) initGame(true);
   });
+
+  // Language button listeners
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lang = btn.dataset.lang;
+      setLanguage(lang);
+      analyticsManager.setUserProperty('language', lang);
+      updateLangButtons();
+      // Re-render dynamic elements if needed
+      if (!document.getElementById('quests-screen').classList.contains('hidden')) renderQuests();
+      if (!document.getElementById('shop-screen').classList.contains('hidden')) {
+        const activeTab = document.querySelector('.shop-tab.active');
+        renderShopItems(activeTab ? activeTab.dataset.tab : 'boosters');
+      }
+      if (!document.getElementById('biome-map-screen').classList.contains('hidden')) showLevelSelect();
+      
+      // Update gameplay difficulty tag if playing
+      const diffEl = document.getElementById('header-difficulty-tag');
+      if (diffEl && !diffEl.classList.contains('hidden')) {
+        const levelData = getCurrentLevelConfig();
+        if (levelData) diffEl.innerText = t(`diff_${levelData.difficulty}`);
+      }
+      
+      updateConfirmationHints();
+    });
+  });
+
+  function updateLangButtons() {
+    const current = getLanguage();
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.lang === current);
+    });
+  }
+
   document.getElementById('login-btn').addEventListener('click', handleLogin);
-  document.getElementById('logout-btn').addEventListener('click', logoutUser);
-  document.getElementById('back-to-menu-btn').addEventListener('click', returnToMainMenu);
-  document.getElementById('show-leaderboard-btn').addEventListener('click', showLeaderboard);
-  document.getElementById('close-leaderboard-btn').addEventListener('click', hideLeaderboard);
+  // User Settings overlay handlers
+  document.getElementById('close-user-settings-btn').addEventListener('click', () => {
+    document.getElementById('user-settings-screen').classList.add('hidden');
+  });
+  document.getElementById('user-settings-rename-btn').addEventListener('click', () => {
+    document.getElementById('user-settings-screen').classList.add('hidden');
+    changeName();
+  });
+  document.getElementById('back-to-menu-btn').addEventListener('click', () => {
+    if (isTutorialActive()) return; // Block during tutorial
+    abandonLevel();
+  });
+  const onShopClick = () => {
+    if (isTutorialActive()) return;
+    const isMapScreen = !document.getElementById('biome-map-screen').classList.contains('hidden');
+    const isGameOver = !document.getElementById('game-over').classList.contains('hidden');
+    const isWinScreen = !document.getElementById('win-screen').classList.contains('hidden');
+    
+    // If actively playing a level (not in map, not in game over, not in win screen)
+    if (!isMapScreen && !isGameOver && !isWinScreen) {
+      document.getElementById('shop-confirm-screen').classList.remove('hidden');
+    } else {
+      analyticsManager.logCustomEvent(analyticsManager.Events.SHOP_OPENED, { source: 'header' });
+      openShop();
+    }
+  };
+
+  document.getElementById('app-header-shop-btn')?.addEventListener('click', onShopClick);
+  document.getElementById('header-shop-btn').addEventListener('click', onShopClick);
+
+
+  // Shop Quit Level Confirmation Handlers
+  document.getElementById('shop-stay-level-btn').addEventListener('click', () => {
+    document.getElementById('shop-confirm-screen').classList.add('hidden');
+  });
+  document.getElementById('shop-quit-level-btn').addEventListener('click', () => {
+    document.getElementById('shop-confirm-screen').classList.add('hidden');
+    abandonLevel();
+    analyticsManager.logCustomEvent(analyticsManager.Events.SHOP_OPENED, { source: 'quit_level' });
+    openShop();
+  });
   document.getElementById('celebration-continue-btn').addEventListener('click', () => {
     document.getElementById('clear-celebration').classList.add('hidden');
     document.getElementById('confetti-container').innerHTML = '';
@@ -129,15 +253,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('exit-settings-btn').addEventListener('click', () => {
     document.getElementById('settings-screen').classList.add('hidden');
-    returnToMainMenu();
   });
 
   // Settings Handlers (header button)
   document.getElementById('settings-btn').addEventListener('click', () => {
+    if (isTutorialActive()) return; // Block during tutorial
     document.getElementById('settings-screen').classList.remove('hidden');
   });
   document.getElementById('close-settings-btn').addEventListener('click', () => {
     document.getElementById('settings-screen').classList.add('hidden');
+  });
+
+  // Tap outside settings to close
+  document.getElementById('settings-screen').addEventListener('click', (e) => {
+    if (e.target.id === 'settings-screen') {
+      document.getElementById('settings-screen').classList.add('hidden');
+    }
   });
 
   // Overlay settings/leaderboard buttons (multiple across screens)
@@ -147,9 +278,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
   document.querySelectorAll('.overlay-leaderboard-btn').forEach(btn => {
-    btn.addEventListener('click', showLeaderboard);
+  });
+  document.querySelectorAll('.overlay-shop-btn').forEach(btn => {
+    btn.addEventListener('click', onShopClick);
   });
 
+  const prestartScreen = document.getElementById('level-prestart-screen');
+  document.getElementById('prestart-close-btn').addEventListener('click', () => {
+    prestartScreen.classList.add('hidden');
+  });
+  document.getElementById('prestart-ad-buff-btn').addEventListener('click', () => {
+    if (prestartAdsThisTry >= 2) {
+      const btn = document.getElementById('prestart-ad-buff-btn');
+      const originalText = btn.innerText;
+      btn.innerText = 'Limit reached (2/2)';
+      if (isAudioEnabled) playErrorSound();
+      setTimeout(() => btn.innerText = originalText, 2000);
+      return;
+    }
+    showRewardedAd('prestart_buff').then(success => {
+      if (success === true) {
+        prestartAdsThisTry++;
+      }
+    });
+  });
+
+  // Level selector listeners (these create the modal on pass level / retries)
+  // `initGame` naturally progresses without map intervention unless menu is hit.
+ 
   // Initialize settings UI
   document.getElementById('audio-toggle').checked = isAudioEnabled;
   document.getElementById('colorblind-toggle').checked = isColorblindEnabled;
@@ -159,7 +315,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     isAudioEnabled = e.target.checked;
     localStorage.setItem('bolitasAudioEnabled', isAudioEnabled);
     if (isAudioEnabled) {
-      if (currentMode && !document.getElementById('login-screen').classList.contains('hidden') === false) {
+      if (currentMode && document.getElementById('login-screen').classList.contains('hidden')) {
         bgmAudio.play().catch(e => console.log('Autoplay prevented'));
       }
     } else {
@@ -174,50 +330,380 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       document.body.classList.remove('color-blind-mode');
     }
+
+    // Refresh shop UI if open
+    if (!document.getElementById('shop-screen').classList.contains('hidden')) {
+      renderShopItems('boosters');
+    }
   });
 
-  // Unlocked overlay btn
-  document.getElementById('unlocked-continue-btn').addEventListener('click', () => {
-    document.getElementById('mode-unlocked-screen').classList.add('hidden');
+  // Force dark mode (always on)
+  document.body.classList.add('dark-theme');
+
+  // Exit Confirmation Screen Handlers
+  document.getElementById('exit-save-close-btn').addEventListener('click', () => {
+    // Assuming economy state is already auto-saved by most actions,
+    // we just ensure a final exit call.
+    App.exitApp();
+  });
+  document.getElementById('exit-stay-btn').addEventListener('click', () => {
+    document.getElementById('exit-confirm-screen').classList.add('hidden');
   });
 
-  // Game Mode Selection
-  document.getElementById('mode-levels-btn').addEventListener('click', () => {
-    currentMode = 'adventure';
-    startGame();
-  });
-  document.getElementById('mode-zen-btn').addEventListener('click', () => {
-    if (localStorage.getItem('bolitasLevel') < 50) return;
-    localStorage.setItem('hasPlayedZen', 'true');
-    currentMode = 'zen';
-    startGame();
-  });
-  document.getElementById('mode-timeattack-btn').addEventListener('click', () => {
-    if (localStorage.getItem('bolitasLevel') < 30) return;
-    localStorage.setItem('hasPlayedTimeAttack', 'true');
-    currentMode = 'timeattack';
-    startGame();
+  function updateConfirmationHints() {
+    const params = {
+      go_icon: '✅',
+      go_text: t('shop_go'),
+      stay_icon: '❌',
+      stay_text: t('shop_stay')
+    };
+    const hintText = t('shop_hint', params);
+    
+    const exitHint = document.querySelector('#exit-confirm-screen [data-i18n="shop_hint"]');
+    if (exitHint) exitHint.innerText = hintText;
+    
+    const shopHint = document.getElementById('shop-confirm-hint');
+    if (shopHint) shopHint.innerText = hintText;
+  }
+
+  // Android Back Button Logic
+  let lastBackPress = 0;
+  App.addListener('backButton', () => {
+    const now = Date.now();
+
+    // Check if any overlay is open and prioritize closing it
+    const activeOverlays = Array.from(document.querySelectorAll('.overlay:not(.hidden)'));
+    if (activeOverlays.length > 0) {
+      // If the exit confirm screen is already open, just stay (or close the modal)
+      if (!document.getElementById('exit-confirm-screen').classList.contains('hidden')) {
+        document.getElementById('exit-confirm-screen').classList.add('hidden');
+        return;
+      }
+      const topOverlay = activeOverlays[activeOverlays.length - 1];
+      // Game-over and win-screen sit on top of the game grid — closing them would
+      // reveal a non-interactive completed/lost level. Go to map instead.
+      if (topOverlay.id === 'game-over') {
+        abandonLevel();
+        return;
+      }
+      if (topOverlay.id === 'win-screen') {
+        returnToMainMenu();
+        return;
+      }
+      // Otherwise, close the top-most overlay (basic stack logic)
+      topOverlay.classList.add('hidden');
+      return;
+    }
+
+    // Double tap within 2 seconds to show the exit confirm screen
+    if (now - lastBackPress < 2000) {
+      document.getElementById('exit-confirm-screen').classList.remove('hidden');
+      lastBackPress = 0; // Reset
+    } else {
+      lastBackPress = now;
+      // Optional: show a small toast or message say "Press again to exit"
+      // console.log('Press back again to exit');
+    }
   });
 
-  document.getElementById('revive-btn').addEventListener('click', showRewardedAd);
+
+
+  // Footer tab listeners
+  document.getElementById('footer-tab-map').addEventListener('click', () => {
+    document.getElementById('quests-screen').classList.add('hidden');
+    document.getElementById('shop-screen').classList.add('hidden');
+    document.getElementById('biome-map-screen').classList.remove('hidden');
+    syncFooterTabs('map');
+    scrollToCurrentBiome();
+  });
+
+  document.getElementById('footer-tab-quests').addEventListener('click', () => {
+    openQuests();
+  });
+
+  document.getElementById('footer-tab-shop').addEventListener('click', () => {
+    analyticsManager.logCustomEvent(analyticsManager.Events.SHOP_OPENED, { source: 'footer' });
+    openShop();
+  });
+
+
+
+  document.getElementById('revive-btn').addEventListener('click', () => showRewardedAd());
+  const pityBtn = document.getElementById('pity-revive-btn');
+  if (pityBtn) {
+    pityBtn.addEventListener('click', () => showPityRewardAd());
+  }
+
+  document.getElementById('out-of-lives-watch-ad-btn').addEventListener('click', () => showRewardedAd('get_life'));
+  document.getElementById('out-of-lives-close-btn').addEventListener('click', () => {
+    window._pendingLevelIndex = undefined;
+    document.getElementById('out-of-lives-screen').classList.add('hidden');
+    returnToMainMenu();
+  });
+  document.getElementById('header-lives-map').addEventListener('click', () => {
+    window._pendingLevelIndex = undefined; // Not starting a level from here
+    const titleEl = document.getElementById('out-of-lives-title');
+    if (titleEl) titleEl.innerText = getLives() <= 0 ? t('out_of_lives_title') : t('lives_info_title');
+    document.getElementById('out-of-lives-screen').classList.remove('hidden');
+  });
+
+  // x2 Coins rewarded ad button on win screen
+  document.getElementById('win-x2-btn').addEventListener('click', () => {
+    if (window._winCoinsEarned > 0) {
+      showRewardedAd('double_coins', window._winCoinsEarned);
+    }
+  });
+
+  // --- New Economy UI Handlers ---
+
+  
+  // Set the localized hint for shop confirmation
+  const shopHintEl = document.getElementById('shop-confirm-hint');
+  if (shopHintEl) {
+    shopHintEl.innerText = t('shop_hint', {
+      go_icon: '✅',
+      go_text: t('shop_go'),
+      stay_icon: '❌',
+      stay_text: t('shop_stay')
+    });
+  }
+
+  // x2 Coins rewarded ad button on win screen
+  document.getElementById('win-continue-btn').addEventListener('click', async () => {
+    document.getElementById('win-screen').classList.add('hidden');
+    
+    // Centralized interstitial policy:
+    // Show every 10 levels OR if 7 minutes passed
+    const globalLevel = (parseInt(localStorage.getItem('bolitasLevel')) || 0) + 1;
+    const now = Date.now();
+    const timeDiff = now - lastAdTimestamp;
+    
+    const shouldByLevel = globalLevel >= 10 && globalLevel % 10 === 0;
+    const shouldByTime = timeDiff > 420000;
+
+    if (shouldByLevel || shouldByTime) {
+      console.log(`Ad triggered by ${shouldByLevel ? 'level' : 'time'}. Showing interstitial.`);
+      await showInterstitialAd();
+    }
+
+    // Go back to level select with reveal animation for THE NEXT level
+    const nextLevel = (parseInt(localStorage.getItem('bolitasLevel')) || 0) + 1;
+    showLevelSelect(nextLevel);
+  });
+  // Init shop module
+  initShop({ updateHeaderCoins, showRewardedAd });
+  initDailySpin({ onCoinsUpdate: updateHeaderCoins, showRewardedAd });
+
+  // Powerup buttons
+  document.querySelectorAll('.powerup-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      handlePowerupClick(btn.dataset.booster);
+    });
+  });
+
+  // Update header coins
+  updateHeaderCoins();
+
+  // Lives system: restore any pending lives and keep UI in sync
+  checkAndRefill();
+  updateLivesUI();
+  setInterval(() => { checkAndRefill(); updateLivesUI(); }, 1000);
 
   checkExistingSession();
-  initAdMob();
+  initAdMob().then(() => {
+    // Show banner after a small delay to ensure native view is ready
+    setTimeout(() => {
+      showBannerAd().catch(e => console.warn("Banner delayed init failed", e));
+    }, 2000);
+  });
+
+  // Consent Required Screen Handlers
+  document.getElementById('retry-consent-btn').addEventListener('click', async () => {
+    await AdMob.showConsentForm();
+    await handleConsentFlow();
+  });
+  document.getElementById('exit-app-btn').addEventListener('click', () => {
+    App.exitApp();
+  });
+  } catch (err) {
+    console.error("CRITICAL: App initialization failed:", err);
+  }
 });
+
+async function handleConsentFlow() {
+  try {
+    // 1. Request consent info
+    const consentInfo = await AdMob.requestConsentInfo();
+    console.log('Consent Info:', consentInfo);
+
+    // 2. Show consent form if required (and not already shown/dismissed)
+    let finalInfo = consentInfo;
+    if (consentInfo.isConsentFormAvailable && consentInfo.status === 'REQUIRED') {
+      await AdMob.showConsentForm();
+      // Re-verify after showing
+      const updatedInfo = await AdMob.requestConsentInfo();
+      if (updatedInfo.status === 'REQUIRED' || updatedInfo.status === 'UNKNOWN') {
+        document.getElementById('consent-required-screen').classList.remove('hidden');
+        return false;
+      }
+      finalInfo = updatedInfo; // Use post-form status for all subsequent checks
+    }
+
+    // 3. Evaluate consent status using the most recent info
+    if (finalInfo.status === 'REQUIRED' || finalInfo.status === 'UNKNOWN') {
+      document.getElementById('consent-required-screen').classList.remove('hidden');
+      return false;
+    }
+
+    // If we reach here, consent is OBTAINED or NOT_REQUIRED
+    document.getElementById('consent-required-screen').classList.add('hidden');
+
+    const isConsentObtained = finalInfo.status === 'OBTAINED' || finalInfo.status === 'NOT_REQUIRED';
+    await FirebaseAnalytics.setEnabled({ enabled: isConsentObtained });
+
+    if (isConsentObtained) {
+      // Pre-load ads
+      prepareInterstitial();
+      prepareRewarded('revive');      // Preload default revive
+      prepareRewarded('shop_coins'); // Preload shop coins
+      showBannerAd();
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Consent flow error:', err);
+    // If it fails, we might want to fail open or closed depending on policy. 
+    // Here we proceed but log the error.
+    return true;
+  }
+}
 
 async function initAdMob() {
   try {
-    await AdMob.initialize({});
+    // Initialize AdMob with COPPA compliance settings
+    await AdMob.initialize({
+      tagForChildDirectedTreatment: true,
+      maxAdContentRating: 'G'
+    });
     console.log('AdMob initialized');
-    FirebaseAnalytics.logEvent({ name: 'admob_initialized', params: {} });
+
+    // Handle GDPR/UMP Consent Flow
+    const canProceed = await handleConsentFlow();
+    if (!canProceed) return;
+
+    analyticsManager.logCustomEvent(analyticsManager.Events.ADMOB_INITIALIZED);
 
     // Rewarded ad listeners (v8 event names from source)
     const onRewarded = (rewardItem) => {
-      console.log('User was rewarded', rewardItem);
-      applyReviveReward();
+      const type = _rewardActionType || 'unknown';
+      const data = _rewardActionData;
+      console.log('User was rewarded for:', type, rewardItem);
+      
+      // Log ad reward watched event
+      analyticsManager.logCustomEvent('ad_reward_watched', {
+        placement: type
+      });
+
+      if (type === 'swap_quest') {
+        if (swapQuest(data)) {
+          if (isAudioEnabled) playCoinSound();
+          renderQuests();
+        }
+      } else if (type === 'daily_spin_respin') {
+        // Delegate to the dailySpin module's respin reward handler
+        if (window._dailySpinOnRespinAdRewarded) window._dailySpinOnRespinAdRewarded();
+        if (isAudioEnabled) playCoinSound();
+      } else if (type === 'swap_weekly_quest') {
+        if (swapWeeklyQuest(data)) {
+          if (isAudioEnabled) playCoinSound();
+          renderQuests();
+        }
+      } else if (type === 'double_coins') {
+        const extraCoins = data || 0;
+        if (extraCoins > 0) {
+          addCoins(extraCoins);
+          window._winCoinsEarned = (window._winCoinsEarned || 0) + extraCoins;
+          document.getElementById('win-coins').innerText = `+${window._winCoinsEarned}`;
+          updateHeaderCoins();
+          
+          if (isAudioEnabled) playCoinSound();
+          const headerCoins = document.getElementById('header-coin-count');
+          headerCoins.classList.remove('reward-pulse');
+          void headerCoins.offsetWidth;
+          headerCoins.classList.add('reward-pulse');
+        }
+        document.getElementById('win-x2-btn').classList.add('hidden');
+        document.getElementById('reward-ready-screen').classList.remove('hidden');
+      } else if (type === 'get_xp') {
+        const xpToGain = getXPForNextLevel();
+        const res = addXP(xpToGain);
+        updateMenuPlayerLevel();
+        
+        // Show confirmation
+        const textEl = document.getElementById('reward-ready-text');
+        textEl.innerHTML = `${t('bonus_xp_earned')}<br>✨ +${xpToGain} XP`;
+        document.getElementById('reward-ready-screen').classList.remove('hidden');
+        
+        analyticsManager.logCustomEvent(analyticsManager.Events.XP_REWARD_CLAIMED, { 
+          amount: xpToGain, 
+          level: res.newLevel 
+        });
+        analyticsManager.setUserProperty('player_level', res.newLevel);
+      } else if (type === 'pity_revive') {
+        addBoosterFree('color_bomb', 1);
+        applyReviveReward(true);
+      } else if (type === 'shop_coins') {
+        const rewardAmount = 100;
+        addCoins(rewardAmount);
+        updateHeaderCoins();
+        const shopCoinEl = document.getElementById('shop-coin-count');
+        if (shopCoinEl) shopCoinEl.innerText = getCoins();
+        
+        if (isAudioEnabled) playCoinSound();
+        const textEl = document.getElementById('reward-ready-text');
+        textEl.innerHTML = `🪙 +${rewardAmount}`;
+        document.getElementById('reward-ready-screen').classList.remove('hidden');
+        
+        analyticsManager.logCustomEvent(analyticsManager.Events.COIN_REWARD_CLAIMED, { 
+          amount: rewardAmount 
+        });
+        analyticsManager.setUserProperty('total_coins', getCoins());
+      } else if (type === 'prestart_buff') {
+        // Grant a random unlocked booster (not shuffle, preferring more impactful ones)
+        const buffBoosters = SHOP_BOOSTERS.filter(b => b.id !== 'shuffle');
+        const chosen = buffBoosters[Math.floor(Math.random() * buffBoosters.length)];
+        addBoosterFree(chosen.id, 1);
+        if (isAudioEnabled) playCoinSound();
+        const textEl = document.getElementById('reward-ready-text');
+        const boosterName = t(`booster_${chosen.id}_name`);
+        textEl.innerHTML = `${chosen.icon} +1 ${boosterName}!`;
+        document.getElementById('reward-ready-screen').classList.remove('hidden');
+        
+        analyticsManager.logCustomEvent(analyticsManager.Events.PRESTART_BUFF_CLAIMED, { 
+          booster: chosen.id 
+        });
+      } else if (type === 'revive') {
+        applyReviveReward();
+      } else if (type === 'get_life') {
+        addLife(1);
+        updateLivesUI();
+        scheduleLivesNotification();
+        document.getElementById('out-of-lives-screen').classList.add('hidden');
+        
+        // If they were trying to start a level, bring them back to the pre-start screen
+        if (window._pendingLevelIndex !== undefined) {
+          showLevelPreStartScreen(window._pendingLevelIndex);
+          window._pendingLevelIndex = undefined;
+        }
+      }
+
+      lastAdTimestamp = Date.now();
+      _rewardActionType = null;
+      _rewardActionData = null;
     };
     const hideLoading = () => {
       console.log('Hiding ad loading screen');
+      isAdLoading = false; // Reset global flag
       document.getElementById('ad-loading-screen').classList.add('hidden');
       if (adLoadingTimeout) {
         clearTimeout(adLoadingTimeout);
@@ -237,9 +723,8 @@ async function initAdMob() {
     ];
 
     events.forEach(eventName => {
-      AdMob.addListener(eventName, (err) => {
-        if (err) console.error(`Ad event ${eventName} with error: `, err);
-        else console.log(`Ad event: ${eventName} `);
+      AdMob.addListener(eventName, (info) => {
+        console.log(`[AdMob] Event: ${eventName}`, info);
         hideLoading();
       });
     });
@@ -247,6 +732,30 @@ async function initAdMob() {
     // Keep the reward listener as is since it doesn't hide the loading screen (dismissal does)
     AdMob.addListener('onRewardedVideoAdReward', onRewarded);
     AdMob.addListener('rewardVideoAdReward', onRewarded);
+
+    AdMob.addListener('rewardVideoAdDismissed', () => {
+      console.log('[AdMob] Ad dismissed, preloading next...');
+      prepareRewarded('revive');
+      prepareRewarded('shop_coins');
+    });
+
+    AdMob.addListener('rewardVideoAdFailedToLoad', (info) => {
+      console.warn('[AdMob] Reward ad failed to load:', info);
+      analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
+        [analyticsManager.Params.AD_TYPE]: 'rewarded',
+        error_code: info?.errorCode ?? 'unknown'
+      });
+      FirebaseCrashlytics.recordException({ message: `Ad failed to load: rewarded - ${info?.errorCode}` }).catch(() => {});
+      setTimeout(() => prepareRewarded('revive'), 15000);
+    });
+
+    AdMob.addListener('onRewardedVideoAdFailedToLoad', (info) => {
+      console.warn('[AdMob] Reward ad failed to load (legacy):', info);
+      analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
+        [analyticsManager.Params.AD_TYPE]: 'rewarded_legacy',
+        error_code: info?.errorCode ?? 'unknown'
+      });
+    });
 
     // Show banner globally as soon as initialized
     showBannerAd();
@@ -260,129 +769,245 @@ async function prepareInterstitial() {
   try {
     const options = {
       adId: 'ca-app-pub-3539090903954344/2163380169',
-      isTesting: false
+      isTesting: false,
+      tagForChildDirectedTreatment: true,
+      maxAdContentRating: 'G'
     };
     await AdMob.prepareInterstitial(options);
   } catch (err) {
     console.error('Prepare Interstitial Error', err);
+    analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
+      [analyticsManager.Params.AD_TYPE]: 'interstitial',
+      error_code: err?.message ?? 'unknown'
+    });
   }
 }
 
-async function prepareRewarded() {
+// Global ad readiness tracker
+window._rewardedAdsReady = {
+  revive: false,
+  shop_coins: false,
+  pity_revive: false
+};
+
+async function prepareRewarded(type = 'revive') {
   try {
+    let adId = 'ca-app-pub-3539090903954344/5831162433'; // Default revive
+    if (type === 'shop_coins') adId = 'ca-app-pub-3539090903954344/7787144841';
+    else if (type === 'pity_revive') adId = 'ca-app-pub-3539090903954344/8952150762';
+
     const options = {
-      adId: 'ca-app-pub-3539090903954344/5831162433',
-      isTesting: false
+      adId: adId,
+      isTesting: false,
+      tagForChildDirectedTreatment: true,
+      maxAdContentRating: 'G'
     };
     await AdMob.prepareRewardVideoAd(options);
+    window._rewardedAdsReady[type] = true;
+    console.log(`[AdMob] Preloaded rewarded ad: ${type}`);
   } catch (err) {
-    console.error('Prepare Rewarded Error', err);
+    window._rewardedAdsReady[type] = false;
+    console.error(`Prepare Rewarded Error (${type})`, err);
+    analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
+      [analyticsManager.Params.AD_TYPE]: `rewarded_${type}`,
+      error_code: err?.message ?? 'unknown'
+    });
   }
 }
 
 let adLoadingTimeout = null;
 
 async function showInterstitialAd() {
+  if (isAdLoading) return;
+  isAdLoading = true;
+
+  let loadingTimeout = null;
   try {
-    document.getElementById('ad-loading-screen').classList.remove('hidden');
+    // Only show loading screen if the ad doesn't open within 250ms
+    loadingTimeout = setTimeout(() => {
+      document.getElementById('ad-loading-screen').classList.remove('hidden');
+    }, 250);
 
-    // Safety timeout: auto-hide after 5 seconds if ad fails or gets stuck
-    if (adLoadingTimeout) clearTimeout(adLoadingTimeout);
-    adLoadingTimeout = setTimeout(() => {
-      console.warn('Ad safety timeout reached, hiding loading screen');
-      document.getElementById('ad-loading-screen').classList.add('hidden');
-      adLoadingTimeout = null;
-    }, 5000);
-
-    // 2-second delay to ensure the user sees the disclaimer/multilingual messages
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // No need to await prepare again here if we pre-load it elsewhere, 
+    // but the plugin handles it fine if it's already cached.
     await AdMob.showInterstitial();
-    FirebaseAnalytics.logEvent({ name: 'ad_impression', params: { ad_type: 'interstitial' } });
+    
+    lastAdTimestamp = Date.now();
+    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, { [analyticsManager.Params.AD_TYPE]: 'interstitial' });
   } catch (err) {
     console.error('Show Interstitial Error', err);
-    document.getElementById('ad-loading-screen').classList.add('hidden');
-    if (adLoadingTimeout) {
-      clearTimeout(adLoadingTimeout);
-      adLoadingTimeout = null;
+  } finally {
+    if (loadingTimeout) {
+      clearTimeout(loadingTimeout);
+      loadingTimeout = null;
     }
+    isAdLoading = false;
+    document.getElementById('ad-loading-screen').classList.add('hidden');
   }
 }
 
-async function showRewardedAd() {
+async function showPityRewardAd() {
+  showRewardedAd('pity_revive');
+}
+
+let _rewardActionType = null;
+let _rewardActionData = null;
+
+async function showRewardedAd(type = 'revive', data = null) {
   if (isAdLoading) return; // Prevent multiple taps
   isAdLoading = true;
 
-  const reviveBtn = document.getElementById('revive-btn');
-  const originalText = reviveBtn.innerText;
-  reviveBtn.innerText = '⏳';
-  reviveBtn.style.opacity = '0.6';
-  reviveBtn.style.pointerEvents = 'none';
+  _rewardActionType = type;
+  _rewardActionData = data;
 
+  let btn = null;
+  let originalText = '';
+
+  if (type === 'revive') btn = document.getElementById('revive-btn');
+  else if (type === 'get_xp') btn = document.getElementById('get-xp-ad-btn');
+  else if (type === 'daily_spin_respin') btn = document.getElementById('respin-btn');
+  else if (type === 'prestart_buff') btn = document.getElementById('prestart-ad-buff-btn');
+  else if (type === 'shop_coins') btn = document.getElementById('watch-ad-btn');
+  else if (type === 'double_coins') btn = document.getElementById('win-x2-btn');
+
+  if (btn) {
+    originalText = btn.innerHTML; // Save full HTML to preserve SVGs
+    btn.innerHTML = `⏳ ${window.t ? window.t('ad_loading') : 'Loading ad...'}`;
+    btn.style.opacity = '0.6';
+    btn.style.pointerEvents = 'none';
+    btn.disabled = true;
+  }
+
+  let loadingTimeout = null;
+  let adTimedOut = false;
   try {
-    document.getElementById('ad-loading-screen').classList.remove('hidden');
+    // Only show loading screen if the ad doesn't open within 250ms
+    loadingTimeout = setTimeout(() => {
+      document.getElementById('ad-loading-screen').classList.remove('hidden');
+    }, 250);
 
-    // Safety timeout: auto-hide after 5 seconds
-    if (adLoadingTimeout) clearTimeout(adLoadingTimeout);
-    adLoadingTimeout = setTimeout(() => {
-      console.warn('Ad safety timeout reached, hiding loading screen');
-      document.getElementById('ad-loading-screen').classList.add('hidden');
-      adLoadingTimeout = null;
-    }, 5000);
+    // Explicitly set the reward type again inside the try block to be safe
+    _rewardActionType = type;
+    _rewardActionData = data;
 
-    // 2-second delay for rewards as well
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    let selectedAdId = 'ca-app-pub-3539090903954344/5831162433'; // Default revive ID
+    if (type === 'shop_coins') {
+      selectedAdId = 'ca-app-pub-3539090903954344/7787144841'; // Shop Coins ID
+    } else if (type === 'pity_revive') {
+      selectedAdId = 'ca-app-pub-3539090903954344/8952150762'; // Pity Lose ID
+    }
 
     const options = {
-      adId: 'ca-app-pub-3539090903954344/5831162433',
-      isTesting: false
+      adId: selectedAdId,
+      isTesting: false,
+      tagForChildDirectedTreatment: true,
+      maxAdContentRating: 'G'
     };
-    await AdMob.prepareRewardVideoAd(options);
+
+    // Map type to the readiness key (multiple types share the same ad unit)
+    const readinessKey = type === 'shop_coins' ? 'shop_coins'
+      : type === 'pity_revive' ? 'pity_revive'
+      : 'revive';
+
+    // Optimization: If NOT already preloaded, call prepare which blocks until ready.
+    // If it WAS preloaded, showRewardVideoAd should be instant.
+    if (!window._rewardedAdsReady[readinessKey]) {
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('AD_TIMEOUT')), 10000)
+      );
+      await Promise.race([AdMob.prepareRewardVideoAd(options), timeoutPromise]);
+    }
+    // Mark as consumed so a second tap doesn't skip prepare on a spent ad
+    window._rewardedAdsReady[readinessKey] = false;
+
     await AdMob.showRewardVideoAd();
-    FirebaseAnalytics.logEvent({ name: 'ad_impression', params: { ad_type: 'rewarded' } });
+
+    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, { [analyticsManager.Params.AD_TYPE]: 'rewarded' });
   } catch (err) {
-    console.error('Show Rewarded Error', err);
-    document.getElementById('ad-loading-screen').classList.add('hidden');
-    if (adLoadingTimeout) {
-      clearTimeout(adLoadingTimeout);
-      adLoadingTimeout = null;
+    const isNoFill = err.message === 'AD_TIMEOUT'
+      || err.message?.includes('No fill')
+      || err.message?.includes('eCPM floor')
+      || err.message?.includes('No ads');
+    if (isNoFill) {
+      adTimedOut = true;
+      const loadingScreen = document.getElementById('ad-loading-screen');
+      const spinner = loadingScreen?.querySelector('.loader-spinner');
+      const msgEl = loadingScreen?.querySelector('#ad-loading-messages');
+      if (spinner) spinner.style.display = 'none';
+      if (msgEl) msgEl.innerHTML = `<p>⚠️ ${t('ad_unavailable')}</p>`;
+      await new Promise(r => setTimeout(r, 2000));
+    } else {
+      console.error('Show Rewarded Error', err);
     }
   } finally {
+    if (loadingTimeout) {
+      clearTimeout(loadingTimeout);
+      loadingTimeout = null;
+    }
     isAdLoading = false;
-    reviveBtn.innerText = originalText;
-    reviveBtn.style.opacity = '1';
-    reviveBtn.style.pointerEvents = 'auto';
+    const loadingScreen = document.getElementById('ad-loading-screen');
+    if (adTimedOut) {
+      // Reset the loading screen state for next time
+      const spinner = loadingScreen?.querySelector('.loader-spinner');
+      const msgEl = loadingScreen?.querySelector('#ad-loading-messages');
+      if (spinner) spinner.style.display = '';
+      if (msgEl) msgEl.innerHTML = `<p data-i18n="ad_support_message">${t('ad_support_message')}</p>`;
+    }
+    loadingScreen?.classList.add('hidden');
+    if (btn) {
+      btn.innerHTML = originalText;
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+      btn.disabled = false;
+    }
   }
 }
 
+// XP Ad Button Listener
+document.getElementById('get-xp-ad-btn')?.addEventListener('click', () => {
+  showRewardedAd('get_xp');
+});
+
 async function showBannerAd() {
+  if (isAdLoading) return;
   try {
-    if (!isBannerCreated) {
-      await AdMob.showBanner({
-        adId: 'ca-app-pub-3539090903954344/8982185366',
-        adSize: BannerAdSize.ADAPTIVE_BANNER,
-        position: BannerAdPosition.BOTTOM_CENTER,
-        margin: 0,
-        isTesting: false,
-      });
-      isBannerCreated = true;
-      FirebaseAnalytics.logEvent({ name: 'ad_impression', params: { ad_type: 'banner' } });
-    } else {
-      await AdMob.resumeBanner();
+    const consentInfo = await AdMob.requestConsentInfo();
+    if (consentInfo.status !== 'OBTAINED' && consentInfo.status !== 'NOT_REQUIRED') {
+      return;
     }
-  } catch (err) {
-    console.warn('Banner ad error:', err);
+    
+    // Safety check to prevent double banner
+    if (isBannerCreated) return;
+
+    await AdMob.showBanner({
+      adId: BANNER_ID,
+      adSize: BannerAdSize.ADAPTIVE_BANNER,
+      position: BannerAdPosition.BOTTOM_CENTER,
+      margin: 0,
+      width: Math.round(window.screen.width),
+      isTesting: false,
+      tagForChildDirectedTreatment: true,
+      maxAdContentRating: 'G'
+    });
+    isBannerCreated = true;
+    // Set to 75px to safely accommodate adaptive banners on most mobile devices
+    document.documentElement.style.setProperty('--banner-height', '75px');
+    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, { [analyticsManager.Params.AD_TYPE]: 'banner' });
+  } catch (e) {
+    console.warn('AdMob Banner error (non-fatal):', e);
   }
 }
 
 async function hideBannerAd() {
   try {
     await AdMob.hideBanner();
+    document.documentElement.style.setProperty('--banner-height', '0px');
   } catch (err) {
     // Ignore if no banner active
   }
 }
 
-function applyReviveReward() {
+function applyReviveReward(isPity = false) {
   // Hide Game Over
   document.getElementById('game-over').classList.add('hidden');
   hasUsedRevive = true;
@@ -390,76 +1015,112 @@ function applyReviveReward() {
   // Re-show banner (it may have been dismissed during ad playback)
   showBannerAd();
 
-  // Show confirmation screen before resuming timer
+  // Show confirmation screen before resuming — flag it so Continuar calls initGame(true)
+  const screen = document.getElementById('reward-ready-screen');
   const textEl = document.getElementById('reward-ready-text');
-  if (currentMode === 'timeattack') {
-    textEl.innerHTML = "Bonus Earned!<br>⏱️ +15 Seconds";
-  } else {
-    textEl.innerHTML = "Life Restored!<br>Continue Playing";
-  }
-  document.getElementById('reward-ready-screen').classList.remove('hidden');
+  textEl.innerHTML = isPity ? t('pity_revive_confirmation') : t('revive_confirmation');
+  screen.dataset.revive = 'true';  // signal the continue button to resume the game
+  screen.classList.remove('hidden');
 }
 
-function shuffleBoard() {
-  // Extract all non-null items
-  const flatItems = [];
+async function shuffleBoard() {
+  if (isAnimating) return;
+  isAnimating = true;
+
+  const bolitas = [];
   for (let r = 0; r < currentRows; r++) {
     for (let c = 0; c < currentCols; c++) {
-      if (grid[r][c] !== null) {
-        flatItems.push(grid[r][c].color);
-        // Remove old dom elements visually for a fresh drop
-        const bol = grid[r][c];
-        if (bol.el && bol.el.parentNode) bol.el.parentNode.removeChild(bol.el);
-        grid[r][c] = null;
+      if (grid[r][c] && grid[r][c].el) {
+        bolitas.push(grid[r][c]);
       }
     }
   }
 
-  // Shuffle colors simple
-  flatItems.sort(() => Math.random() - 0.5);
+  // Phase 1: Animate OUT
+  bolitas.forEach(bol => bol.el.classList.add('shuffling-out'));
+  
+  // Wait for out animation (CSS is 0.4s)
+  await new Promise(resolve => setTimeout(resolve, 400));
+
+  // Extract colors
+  const flatItems = bolitas.map(bol => bol.color);
+  
+  // Clear grid vertically
+  for (let r = 0; r < currentRows; r++) {
+    for (let c = 0; c < currentCols; c++) {
+      if (grid[r][c] && grid[r][c].el && grid[r][c].el.parentNode) {
+        grid[r][c].el.parentNode.removeChild(grid[r][c].el);
+      }
+      grid[r][c] = null;
+    }
+  }
+
+  // Shuffle colors
+  for (let i = flatItems.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [flatItems[i], flatItems[j]] = [flatItems[j], flatItems[i]];
+  }
 
   uiGrid.innerHTML = '';
   elementPositionMap = new WeakMap();
 
+  // Phase 2: Animate IN
   let index = 0;
+  const newBolitas = [];
   for (let c = 0; c < currentCols; c++) {
     for (let r = currentRows - 1; r >= 0; r--) {
       if (index < flatItems.length) {
         createBolita(r, c, flatItems[index]);
+        const newBol = grid[r][c];
+        if (newBol && newBol.el) {
+          newBol.el.classList.add('shuffling-in');
+          newBolitas.push(newBol.el);
+        }
         index++;
       }
     }
   }
 
-  // Drop gravity just in case
+  // Apply gravity/shift just in case of holes
   applyGravity();
   applyHorizontalShift();
 
+  // Wait for in animation (CSS is 0.5s)
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Phase 3: Cleanup
+  newBolitas.forEach(el => el.classList.remove('shuffling-in'));
+  isAnimating = false;
+
   if (!checkPossibleMoves()) {
-    // In lucky event it's still stuck, just reroll again
-    shuffleBoard();
+    // If still stuck, shuffle again (recursive but safe due to await)
+    await shuffleBoard();
   }
 }
 
 function checkExistingSession() {
   const savedUser = localStorage.getItem('bolitasUser');
   currentLevelIndex = parseInt(localStorage.getItem('bolitasLevel')) || 0;
-  document.getElementById('current-level-display').innerText = currentLevelIndex + 1;
-  updateModeButtons();
-
-  // Always make the overlay visible
-  document.getElementById('login-screen').classList.remove('hidden');
+  
+  // Update level display in map header if it exists
+  const levelEl = document.getElementById('app-header-level');
+  if (levelEl) levelEl.innerText = t('level_display', { val: currentLevelIndex + 1 });
 
   if (savedUser) {
-    // Returning user: skip login form, show mode menu directly
     currentUser = savedUser;
-    // document.getElementById('current-username').innerText = currentUser;
-    document.getElementById('auth-panel').classList.add('hidden');
-    document.getElementById('main-menu-panel').classList.remove('hidden');
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('biome-map-screen').classList.remove('hidden');
+    showLevelSelect();
+    updateMapHeader();
+    updateMenuPlayerLevel();
+    // Auto-open the daily spin wheel if today's free spin is available
+    if (canSpinToday()) {
+      setTimeout(() => openDailySpinModal(), 800);
+    }
   } else {
-    // New user: show login form only
-    document.getElementById('auth-panel').classList.remove('hidden');
-    document.getElementById('main-menu-panel').classList.add('hidden');
+    // New user: show login form
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('biome-map-screen').classList.add('hidden');
   }
 }
 
@@ -477,76 +1138,49 @@ function handleLogin() {
   errorMsg.classList.add('hidden');
   currentUser = alias;
   localStorage.setItem('bolitasUser', alias);
-  // document.getElementById('current-username').innerText = currentUser;
 
-  // If tutorial hasn't been done, go directly to tutorial (which starts Level 1 after)
-  if (!localStorage.getItem('bolitasTutorialDone')) {
-    currentMode = 'adventure';
-    currentLevelIndex = 0;
-    showTutorial();
-    return;
+  // Set Crashlytics user context (hashed — no PII sent)
+  const _hashedAlias = btoa(alias).substring(0, 16);
+  FirebaseCrashlytics.setUserId({ userId: _hashedAlias }).catch(() => {});
+  FirebaseCrashlytics.setCustomKey({ key: 'username_hash', value: _hashedAlias }).catch(() => {});
+
+  // Snapshot user properties at login
+  analyticsManager.setUserProperty('language', getLanguage());
+  const _savedMax = localStorage.getItem('bolitasLevel');
+  if (_savedMax) analyticsManager.setUserProperty('highest_level', _savedMax);
+  const _savedTotal = localStorage.getItem('bolitasTotalLevelsCompleted');
+  if (_savedTotal) analyticsManager.setUserProperty('total_levels_completed', _savedTotal);
+
+  // Safety: abort any potentially stuck tutorials
+  abortActiveTutorial();
+
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('biome-map-screen').classList.remove('hidden');
+  showLevelSelect();
+  updateMapHeader();
+  updateMenuPlayerLevel();
+  // Auto-open the daily spin wheel for new sessions
+  if (canSpinToday()) {
+    setTimeout(() => openDailySpinModal(), 800);
   }
-
-  document.getElementById('auth-panel').classList.add('hidden');
-  document.getElementById('main-menu-panel').classList.remove('hidden');
 }
 
-function logoutUser() {
-  localStorage.removeItem('bolitasUser');
-  localStorage.removeItem('bolitasLevel');
-  currentUser = null;
-  currentLevelIndex = 0;
-  document.getElementById('current-level-display').innerText = '1';
-  updateModeButtons();
+function changeName() {
+  document.getElementById('username-input').value = currentUser || '';
   document.getElementById('login-screen').classList.remove('hidden');
-  document.getElementById('auth-panel').classList.remove('hidden');
-  document.getElementById('main-menu-panel').classList.add('hidden');
+  document.getElementById('biome-map-screen').classList.add('hidden');
 }
 
-async function showLeaderboard() {
-  document.getElementById('leaderboard-screen').classList.remove('hidden');
-  const listEl = document.getElementById('leaderboard-list');
-  listEl.innerHTML = '<li>⏳</li>';
 
-  try {
-    const scores = await getLeaderboard();
-    listEl.innerHTML = '';
-    if (scores.length === 0) {
-      listEl.innerHTML = '<li>—</li>';
-      return;
-    }
-
-    scores.forEach((s, i) => {
-      const li = document.createElement('li');
-      if (currentUser && s.username === currentUser) {
-        li.classList.add('highlight');
-      }
-      li.innerHTML = `
-  < span class="lb-rank" > #${i + 1}</span >
-        <span class="lb-name">${s.username}</span>
-        <span class="lb-score">${s.score} pt</span>
-`;
-      listEl.appendChild(li);
-    });
-  } catch (e) {
-    listEl.innerHTML = '<li>❌</li>';
-    console.error(e);
-  }
-}
-
-function hideLeaderboard() {
-  document.getElementById('leaderboard-screen').classList.add('hidden');
-}
 
 // --- Local Notifications (Retention) ---
 const INACTIVITY_NOTIFICATIONS = [
-  { id: 101, delayH: 8, title: '¡Las bolitas te extrañan! 👀', body: 'Llevas 8 horas sin jugar, ¿qué tal una partida rápida de Gloop?' },
   { id: 102, delayH: 24, title: '¡Récords por batir! 🏆', body: 'Tu puntuación máxima te está esperando. ¡Entra y supérala!' },
-  { id: 103, delayH: 48, title: 'Modo Zen te espera 🧘‍♀️', body: 'Hace dos días que no juegas. Relájate conectando colores sin límite de tiempo.' },
+  { id: 103, delayH: 48, title: '¿Podrás pasar el nivel? 🧩', body: 'Te quedaste a medio camino. ¡Vuelve para desbloquear el siguiente bioma!' },
   { id: 104, delayH: 72, title: '¡El reto se pone difícil! 🔥', body: 'Nuevos desafíos y niveles te esperan. ¿Te atreves?' },
-  { id: 105, delayH: 120, title: '¡Ayuda! Estamos atascadas 🆘', body: 'Hace 5 días que no limpias el tablero. ¡Ven a hacer estallar colores!' },
-  { id: 106, delayH: 168, title: 'Tiempo Extra de regalo 🎁', body: '¡Ha pasado una semana! Entra ahora y revive tu próxima partida totalmente gratis.' },
-  { id: 107, delayH: 240, title: 'Alerta Máxima Nivel 100 🚨', body: 'Llevas 10 días fuera. ¡El tablero está a punto de desbordarse, entra rápido!' }
+  { id: 105, delayH: 120, title: '¡Ayuda! Estamos atascadas 🆘', body: 'Ven a limpiar el tablero. ¡Está lleno de telarañas!' },
+  { id: 106, delayH: 168, title: '¡Regalito para ti! 🎁', body: '¡Ha pasado una semana! Entra ahora y reclama una sorpresa para tu próxima partida.' },
+  { id: 107, delayH: 240, title: 'Alerta Máxima Nivel 100 🚨', body: '¡El tablero está a punto de desbordarse, entra rápido!' }
 ];
 
 // Ask for notification permission at app startup (does not schedule anything yet)
@@ -554,7 +1188,10 @@ async function requestNotificationPermission() {
   try {
     const permStatus = await LocalNotifications.checkPermissions();
     if (permStatus.display !== 'granted') {
-      await LocalNotifications.requestPermissions();
+      const result = await LocalNotifications.requestPermissions();
+      analyticsManager.logCustomEvent(analyticsManager.Events.NOTIFICATION_PERMISSION, {
+        [analyticsManager.Params.PERMISSION_STATUS]: result.display
+      });
     }
   } catch (e) {
     console.warn('Notification permission request failed:', e);
@@ -578,37 +1215,116 @@ async function setupInactivityNotifications() {
 
     // Schedule new ones
     const now = Date.now();
-    const notificationsToSchedule = INACTIVITY_NOTIFICATIONS.map(n => {
+    let notificationsToSchedule = INACTIVITY_NOTIFICATIONS.map(n => {
       const scheduleTime = new Date(now + n.delayH * 60 * 60 * 1000);
       return {
         id: n.id,
         title: n.title,
         body: n.body,
-        schedule: { at: scheduleTime },
-        smallIcon: 'ic_launcher_round'
+        schedule: { at: scheduleTime }
       };
     });
+
+    // Schedule Daily Quest Notification (Next 9 AM)
+    notificationsToSchedule.push({
+      id: 201,
+      title: '¡Nuevas misiones diarias! 🎯',
+      body: 'Entra ahora para completar tus misiones del día y ganar monedas.',
+      schedule: { at: new Date(getNextDailyReset()) }
+    });
+
+    // Schedule Weekly Quest Notification (Next Monday 9 AM)
+    notificationsToSchedule.push({
+      id: 202,
+      title: '¡Misiones semanales listas! 🏆',
+      body: 'Una nueva semana ha comenzado. ¡Consigue grandes recompensas!',
+      schedule: { at: new Date(getNextWeeklyReset()) }
+    });
+
+    // Schedule Lives Full Notification
+    await scheduleLivesNotification(notificationsToSchedule);
 
     await LocalNotifications.schedule({ notifications: notificationsToSchedule });
   } catch (e) {
     console.error('Error setup local notifications:', e);
   }
 }
+
+/**
+ * Schedules or cancels the life-full notification (ID 301).
+ * Can be called independently or as part of a batch.
+ */
+async function scheduleLivesNotification(batch = null) {
+  try {
+    const permStatus = await LocalNotifications.checkPermissions();
+    if (permStatus.display !== 'granted') return;
+
+    const restoreTime = getFullRestoreTime();
+    if (restoreTime) {
+      const notif = {
+        id: 301,
+        title: t('lives_full_notif_title'),
+        body: t('lives_full_notif_body'),
+        schedule: { at: new Date(restoreTime) }
+      };
+      if (batch) {
+        batch.push(notif);
+      } else {
+        await LocalNotifications.schedule({ notifications: [notif] });
+      }
+    } else {
+      // Lives are already full or something went wrong, ensure no notification is pending
+      if (!batch) {
+        await LocalNotifications.cancel({ notifications: [{ id: 301 }] });
+      }
+    }
+  } catch (e) {
+    console.error('Error scheduling lives notification:', e);
+  }
+}
+
+// Global Game Over Menu Button Listener
+document.getElementById('game-over-menu-btn').addEventListener('click', () => {
+  if (currentMode === 'adventure') {
+    useLife();
+    updateLivesUI();
+    scheduleLivesNotification();
+  }
+  returnToMainMenu();
+});
 // ---------------------------------------
+
+// Called when the player leaves a level mid-game (not via a natural win/lose flow)
+function abandonLevel() {
+  if (currentMode === 'adventure') {
+    useLife();
+    updateLivesUI();
+    scheduleLivesNotification();
+  }
+  returnToMainMenu();
+}
 
 function returnToMainMenu() {
   document.getElementById('game-over').classList.add('hidden');
-  document.getElementById('login-screen').classList.remove('hidden');
-  document.getElementById('main-menu-panel').classList.remove('hidden');
-  document.getElementById('auth-panel').classList.add('hidden');
-  document.getElementById('current-level-display').innerText = currentLevelIndex + 1;
-  updateModeButtons();
+  document.getElementById('win-screen')?.classList.add('hidden');
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('level-prestart-screen')?.classList.add('hidden');
+  document.getElementById('biome-map-screen').classList.remove('hidden');
+  document.querySelector('.game-area').classList.add('hidden');
+  document.querySelector('#game-container > header')?.classList.add('hidden');
+  document.getElementById('powerups-bar').classList.add('hidden');
+  document.getElementById('powerups-bar').style.visibility = '';
+  const passCont = document.getElementById('pass-level-container');
+  passCont.classList.add('hidden');
+  passCont.style.visibility = '';
+  document.querySelector('.app-footer')?.classList.remove('hidden');
   clearInterval(timerInterval);
   bgmAudio.pause();
-
-  if (currentMode === 'zen') {
-    showInterstitialAd();
-  }
+  showLevelSelect();
+  updateMapHeader();
+  updateHeaderCoins();
+  updateMenuPlayerLevel();
+  updateFooterQuestsGlow();
 }
 
 function startGame() {
@@ -618,25 +1334,59 @@ function startGame() {
     return;
   }
 
-  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('biome-map-screen').classList.add('hidden');
+  document.getElementById('quests-screen').classList.add('hidden');
+  document.getElementById('shop-screen').classList.add('hidden');
+  document.querySelector('.app-footer')?.classList.add('hidden');
+  
   if (isAudioEnabled) {
     bgmAudio.play().catch(e => console.log('Autoplay prevented'));
   }
-  FirebaseAnalytics.logEvent({ name: 'level_start', params: { mode: currentMode, level: currentLevelIndex + 1 } });
+  trackGamePlayed(currentMode);
   initGame();
 }
 
 function initGame(isRevive = false) {
-  document.getElementById('game-over').classList.add('hidden');
-  document.getElementById('pass-level-btn').classList.add('hidden');
-  showBannerAd();
+  if (!isRevive) {
+    const levelData = getCurrentLevelConfig();
+    analyticsManager.logCustomEvent(analyticsManager.Events.LEVEL_START, {
+      [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
+      [analyticsManager.Params.BIOME_NAME]: levelData?.biome || 'unknown'
+    });
+    // Keep Crashlytics informed of current level for crash context
+    FirebaseCrashlytics.setCustomKey({ key: 'current_level', value: String(currentLevelIndex + 1) }).catch(() => {});
+    FirebaseCrashlytics.setCustomKey({ key: 'current_biome', value: levelData?.biome || 'unknown' }).catch(() => {});
+  }
+
+  document.querySelector('.app-footer')?.classList.add('hidden');
+  document.querySelector('#game-container > header')?.classList.remove('hidden');
+  document.getElementById('game-over')?.classList.add('hidden');
+  document.getElementById('pass-level-btn')?.classList.add('hidden');
+  document.getElementById('win-quests-area')?.classList.add('hidden');
+  // showBannerAd() moved to boot flow to prevent AdMob race condition crash
+  
+  // Ensure game components are visible
+  document.querySelector('.game-area').classList.remove('hidden');
+  const passCont = document.getElementById('pass-level-container');
+  passCont.classList.remove('hidden');
+  passCont.style.visibility = 'hidden';
+  document.getElementById('powerups-bar').classList.remove('hidden');
+  document.getElementById('powerups-bar').style.visibility = '';
+  
   uiGrid.innerHTML = '';
+  elementPositionMap = new WeakMap(); // Clear position mapping for new game
+  activePowerup = null;
+  if (!isRevive) {
+    boostersUsedInLevel = {};
+  }
+  renderPowerups();
 
   if (!isRevive) {
     score = 0;
     comboMultiplier = 1;
     hasUsedRevive = false;
     levelCompleted = false;
+    window._levelCompleteHandled = false;
 
     // Reset inactivity notifications timer
     setupInactivityNotifications();
@@ -648,34 +1398,33 @@ function initGame(isRevive = false) {
   hintedElements = [];
   clearInterval(timerInterval);
 
-  // Configure grid based on mode
+  // Configure grid based on mode — only adventure mode
   const leaderboardBtn = document.getElementById('show-leaderboard-btn');
+  const level = getCurrentLevelConfig();
+  currentRows = level.rows;
+  currentCols = level.cols;
+  currentColors = level.colors;
 
-  if (currentMode === 'adventure') {
-    const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
-    currentRows = config.rows;
-    currentCols = config.cols;
-    currentColors = config.colors;
-    currentColorSet = COLORS;
-    uiHeaderMode.innerText = `LVL ${currentLevelIndex + 1} `;
-    leaderboardBtn.classList.add('hidden');
-  } else if (currentMode === 'zen') {
-    currentRows = 10;
-    currentCols = 10;
-    currentColorSet = ZEN_COLORS;
-    currentColors = ZEN_COLORS.length;
-    uiHeaderMode.innerText = `🧘 Zen`;
-    leaderboardBtn.classList.add('hidden');
-  } else if (currentMode === 'timeattack') {
-    currentRows = 8;
-    currentCols = 8;
-    currentColorSet = COLORS;
-    currentColors = 5;
-    timeRemaining = isRevive ? 15 : 60;
-    uiHeaderMode.innerText = `⏱️ Ranking`;
-    leaderboardBtn.classList.remove('hidden');
-    startTimer();
+  // Update difficulty tag in header
+  const diffEl = document.getElementById('header-difficulty-tag');
+  if (diffEl) {
+    diffEl.innerText = t(`diff_${level.difficulty}`).toUpperCase();
+    diffEl.className = `header-diff-tag diff-text-${level.difficulty}`;
+    diffEl.classList.remove('hidden');
   }
+
+  // Apply biome background color
+  const { block } = getBlockForLevel(currentLevelIndex + 1);
+  if (block && block.themeColors && block.themeColors.length > 0) {
+    const gradient = `linear-gradient(180deg, ${block.themeColors.join(', ')})`;
+    document.getElementById('game-container').style.background = gradient;
+  }
+
+  currentColorSet = COLORS;
+  if (uiHeaderMode) uiHeaderMode.innerText = `${t('level_display', { val: currentLevelIndex + 1 })}`;
+  leaderboardBtn?.classList.add('hidden');
+  document.getElementById('header-shop-btn')?.classList.remove('hidden');
+  // Booster container removed in UI refactor
 
   // Set CSS variables
   document.documentElement.style.setProperty('--rows', currentRows);
@@ -683,35 +1432,22 @@ function initGame(isRevive = false) {
 
   // Set aspect ratio based on dimension
   uiGrid.style.aspectRatio = `${currentCols} / ${currentRows}`;
+  requestAnimationFrame(sizeGrid);
 
   grid = Array.from({ length: currentRows }, () => new Array(currentCols).fill(null));
 
   for (let r = 0; r < currentRows; r++) {
     for (let c = 0; c < currentCols; c++) {
-      let color = null;
-      let fails = 0;
-
-      if (currentMode === 'adventure') {
-        fails = parseInt(localStorage.getItem('bolitasLevelFails') || '0');
-      }
-
-      // Invisible adaptive difficulty: cluster colors if failed >= 3 times
-      if (fails >= 3) {
-        const clusterChance = Math.min(0.7, (fails - 2) * 0.15);
-        if (Math.random() < clusterChance) {
-          const neighbors = [];
-          if (r > 0 && grid[r - 1][c]) neighbors.push(grid[r - 1][c].color);
-          if (c > 0 && grid[r][c - 1]) neighbors.push(grid[r][c - 1].color);
-          if (neighbors.length > 0) {
-            color = neighbors[Math.floor(Math.random() * neighbors.length)];
-          }
+      // Restore limit: max adjacent balls sequence to 5
+      let allowedColors = [];
+      for (let i = 0; i < currentColors; i++) {
+        if (getPredictedClusterSize(r, c, currentColorSet[i]) <= 5) {
+          allowedColors.push(currentColorSet[i]);
         }
       }
+      if (allowedColors.length === 0) allowedColors = currentColorSet.slice(0, currentColors);
 
-      if (!color) {
-        color = currentColorSet[Math.floor(Math.random() * currentColors)];
-      }
-
+      const color = allowedColors[Math.floor(Math.random() * allowedColors.length)];
       createBolita(r, c, color);
     }
   }
@@ -721,9 +1457,29 @@ function initGame(isRevive = false) {
     initGame(isRevive); // Reroll until board is playable enough
   } else {
     resetHintTimer();
+    // Check for booster tutorial after board is ready
+    if (currentMode === 'adventure' && !isRevive) {
+      setTimeout(() => {
+        checkBoosterTutorial(currentLevelIndex + 1, {
+          updateHeaderCoins,
+          renderShopItems,
+          setTutorialActive,
+          renderPowerups
+        });
+      }, 500);
+    }
+
   }
 }
 
+
+
+
+
+
+
+/* 
+// startTimer is legacy (Zen/Timeattack disabled)
 function startTimer() {
   clearInterval(timerInterval); // prevent duplicate timers
   updateScore(0);
@@ -732,15 +1488,43 @@ function startTimer() {
     updateScore(0);
     if (timeRemaining <= 0) {
       clearInterval(timerInterval);
-      showGameOver(true);
+      showGameOver(false); // was timeout=true
     }
   }, 1000);
+}
+*/
+
+function sizeGrid() {
+  const gameArea = document.querySelector('.game-area');
+  if (!gameArea || !uiGrid || !currentCols || !currentRows) return;
+
+  // Clear any previous constraint so we measure the natural available height
+  gameArea.style.maxHeight = '';
+
+  const cs = getComputedStyle(gameArea);
+  const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const availW = gameArea.clientWidth - padX;
+  const availH = gameArea.clientHeight - padY;   // forced reflow returns unconstrained height
+  if (availW <= 0 || availH <= 0) return;
+
+  const w = Math.min(availW, availH * currentCols / currentRows);
+  const h = Math.min(availH, availW * currentRows / currentCols);
+  uiGrid.style.width = Math.floor(w) + 'px';
+  uiGrid.style.height = Math.floor(h) + 'px';
+
+  // Shrink game-area to the board's height — eliminates dead vertical space
+  gameArea.style.maxHeight = (Math.ceil(h) + padY) + 'px';
 }
 
 function createBolita(r, c, color) {
   const el = document.createElement('div');
   el.className = 'bolita';
+
+
   el.dataset.color = color;
+  el.dataset.row = r;
+  el.dataset.col = c;
   el.style.setProperty('--row', r);
   el.style.setProperty('--col', c);
 
@@ -765,7 +1549,29 @@ async function handleBolitaClick(startR, startC, el) {
   const currentPos = findBolitaByElement(el);
   if (!currentPos) return;
 
-  const { r, c } = currentPos;
+  // SOURCE OF TRUTH: Use dataset if available to match visual state perfectly
+  let r = currentPos.r;
+  let c = currentPos.c;
+  if (el.dataset.row !== undefined && el.dataset.col !== undefined) {
+    r = parseInt(el.dataset.row);
+    c = parseInt(el.dataset.col);
+  }
+
+  if (activePowerup) {
+    if (activePowerup === 'bomb') {
+      activateBombAt(r, c);
+      return;
+    } else if (activePowerup === 'color_bomb') {
+      activateColorBomb(grid[r][c].color);
+      return;
+    } else if (activePowerup === 'sniper') {
+      activateSniper(r, c);
+      return;
+    } else if (activePowerup === 'magic_brush') {
+      showMagicBrushPicker(r, c, el);
+      return;
+    }
+  }
 
   // Check if it's already selected
   const isAlreadySelected = selectedGroup.some(b => b.r === r && b.c === c);
@@ -788,15 +1594,25 @@ async function handleBolitaClick(startR, startC, el) {
       navigator.vibrate(groupToPop.length >= 8 ? 60 : 30);
     }
 
+    // Screen shake for big pops (10+ bolitas)
+    if (groupToPop.length >= 10) {
+      uiGrid.classList.add('shake');
+      setTimeout(() => uiGrid.classList.remove('shake'), 350);
+    }
 
     groupToPop.forEach(bolita => {
       bolita.el.classList.remove('selected');
       bolita.el.classList.add('popped');
-      grid[bolita.r][bolita.c] = null; // remove from logic grid immediately
+      grid[bolita.r][bolita.c] = null;
     });
+
+    // Track economy
+    const popColor = groupToPop[0]?.color || 'red';
+    trackPop(popColor, groupToPop.length);
 
     // Add Score
     let points = calculatePoints(groupToPop.length);
+    trackScore(points);
     updateScore(points);
 
     // Spawn floating score visually at the clicked bolita
@@ -806,11 +1622,7 @@ async function handleBolitaClick(startR, startC, el) {
     await new Promise(res => setTimeout(res, 200));
 
     applyGravity();
-    if (currentMode === 'zen') {
-      refillBoard();
-    } else {
-      applyHorizontalShift();
-    }
+    applyHorizontalShift();
 
     // Clean up DOM elements
     setTimeout(() => {
@@ -820,7 +1632,7 @@ async function handleBolitaClick(startR, startC, el) {
       isAnimating = false;
 
       // If tutorial is active, fire progress on pop completion
-      if (isTutorialActive) {
+      if (isTutorialActive()) {
         handleTutorialProgress();
         return;
       }
@@ -828,19 +1640,15 @@ async function handleBolitaClick(startR, startC, el) {
       // Check if the board is completely clear
       if (isBoardClear()) {
         showCelebration();
+        setTimeout(handleLevelComplete, 1500);
         return;
       }
 
       if (!checkPossibleMoves()) {
-        // In adventure mode, check if the target was reached
-        if (currentMode === 'adventure') {
-          const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
-          if (score >= config.target) {
-            document.getElementById('pass-level-btn').classList.add('hidden');
-            handleLevelComplete();
-          } else {
-            showGameOver(false);
-          }
+        const config = getCurrentLevelConfig();
+        if (score >= config.target) {
+          document.getElementById('pass-level-btn').classList.add('hidden');
+          handleLevelComplete();
         } else {
           showGameOver(false);
         }
@@ -886,7 +1694,12 @@ async function handleBolitaClick(startR, startC, el) {
       selectedGroup.forEach(b => b.el.classList.add('selected'));
       drawSelectionOutline(selectedGroup);
       // If tutorial is active, advance to 'pop' phase
-      if (isTutorialActive) handleTutorialProgress();
+      if (isTutorialActive()) {
+        handleTutorialProgress({
+          onComplete: returnToMainMenu
+        });
+      }
+
     } else {
       if (isAudioEnabled) playErrorSound();
     }
@@ -920,6 +1733,33 @@ function findBolitaByElement(el) {
   return null;
 }
 
+function getPredictedClusterSize(r, c, targetColor) {
+  const temp = grid[r][c];
+  grid[r][c] = { color: targetColor };
+  const size = getClusterSize(r, c, targetColor);
+  grid[r][c] = temp;
+  return size;
+}
+
+function getClusterSize(startR, startC, targetColor) {
+  let count = 0;
+  const visited = new Set();
+  const dfs = (currR, currC) => {
+    if (currR < 0 || currR >= currentRows || currC < 0 || currC >= currentCols) return;
+    const key = `${currR},${currC}`;
+    if (visited.has(key)) return;
+    if (!grid[currR][currC] || grid[currR][currC].color !== targetColor) return;
+    visited.add(key);
+    count++;
+    dfs(currR + 1, currC);
+    dfs(currR - 1, currC);
+    dfs(currR, currC + 1);
+    dfs(currR, currC - 1);
+  };
+  dfs(startR, startC);
+  return count;
+}
+
 function applyGravity() {
   for (let c = 0; c < currentCols; c++) {
     let emptyRow = currentRows - 1;
@@ -933,6 +1773,7 @@ function applyGravity() {
           grid[r][c] = null;
           item.r = emptyRow;
           item.c = c;
+          item.el.dataset.row = emptyRow; // Sync for tutorials
           item.el.style.setProperty('--row', emptyRow);
         }
         emptyRow--;
@@ -965,6 +1806,7 @@ function applyHorizontalShift() {
           grid[r][newC] = item;
           grid[r][c] = null;
           item.c = newC;
+          item.el.dataset.col = newC; // Sync for tutorials
           item.el.style.setProperty('--col', newC);
         }
       }
@@ -976,31 +1818,16 @@ function refillBoard() {
   for (let c = 0; c < currentCols; c++) {
     for (let r = 0; r < currentRows; r++) {
       if (grid[r][c] === null) {
-        let color = null;
-        let fails = 0;
-
-        if (currentMode === 'adventure') {
-          fails = parseInt(localStorage.getItem('bolitasLevelFails') || '0');
-        }
-
-        if (fails >= 3) {
-          const clusterChance = Math.min(0.7, (fails - 2) * 0.15);
-          if (Math.random() < clusterChance) {
-            const neighbors = [];
-            // Check below since we fill from top
-            if (r < currentRows - 1 && grid[r + 1][c]) neighbors.push(grid[r + 1][c].color);
-            if (c > 0 && grid[r][c - 1]) neighbors.push(grid[r][c - 1].color);
-            if (c < currentCols - 1 && grid[r][c + 1]) neighbors.push(grid[r][c + 1].color);
-            if (neighbors.length > 0) {
-              color = neighbors[Math.floor(Math.random() * neighbors.length)];
-            }
+        // Restore limit: max adjacent balls sequence to 5
+        let allowedColors = [];
+        for (let i = 0; i < currentColors; i++) {
+          if (getPredictedClusterSize(r, c, currentColorSet[i]) <= 5) {
+            allowedColors.push(currentColorSet[i]);
           }
         }
+        if (allowedColors.length === 0) allowedColors = currentColorSet.slice(0, currentColors);
 
-        if (!color) {
-          color = currentColorSet[Math.floor(Math.random() * currentColors)];
-        }
-
+        const color = allowedColors[Math.floor(Math.random() * allowedColors.length)];
         createBolita(r, c, color);
 
         // Little trick to animate falling from top
@@ -1065,85 +1892,54 @@ function clearSelectionOutline() {
 function calculatePoints(count) {
   if (count <= 3) return 100;
   if (count === 4) return 300;
-  if (count === 5) return 600;
-  if (count === 6) return 1200;
-  return 2000;
+  if (count === 5) return 800;
+  if (count === 6) return 1500;
+  return 3000;
+}
+
+function getStarCount(currentScore, target) {
+  if (currentScore >= target * 1.25) return 3;
+  if (currentScore >= target * 1.10) return 2;
+  if (currentScore >= target) return 1;
+  return 0;
+}
+
+function getStarProgress(currentScore, target) {
+  if (currentScore >= target * 1.25) return 1;
+  if (currentScore >= target * 1.10) return (currentScore - target * 1.10) / (target * 0.15);
+  if (currentScore >= target) return (currentScore - target) / (target * 0.10);
+  return Math.min(currentScore / target, 1);
+}
+
+function updateStarDisplay() {
+  const config = getCurrentLevelConfig();
+  if (!config) return;
+  const stars = getStarCount(score, config.target);
+  const progress = getStarProgress(score, config.target);
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById(`hud-star-${i}`);
+    if (el) el.classList.toggle('filled', i <= stars);
+  }
+  const fill = document.getElementById('star-bar-fill');
+  if (fill) fill.style.width = `${Math.min(progress, 1) * 100}%`;
+  const scoreText = document.getElementById('hud-score-text');
+  if (scoreText) scoreText.innerText = `${score} / ${config.target}`;
 }
 
 function updateScore(points) {
   score += points;
-  if (currentMode === 'timeattack') {
-    uiHeaderScoreDetails.innerText = `⭐ ${score} ⏱️ ${timeRemaining}`;
-  } else if (currentMode === 'adventure') {
-    const config = LEVELS[Math.min(currentLevelIndex, LEVELS.length - 1)];
-    uiHeaderScoreDetails.innerText = `⭐ ${score} / ${config.target}`;
-    // Show pass-level button when target is reached
-    if (score >= config.target && !levelCompleted) {
+  updateStarDisplay();
+  // Show pass-level button when target is reached
+  const config = getCurrentLevelConfig();
+  if (score >= config.target) {
+    if (!levelCompleted) {
       levelCompleted = true;
-      document.getElementById('pass-level-btn').classList.remove('hidden');
     }
-  } else {
-    uiHeaderScoreDetails.innerText = `⭐ ${score}`;
+    document.getElementById('pass-level-container').style.visibility = 'visible';
   }
 }
 
-function updateModeButtons() {
-  const zenBtn = document.getElementById('mode-zen-btn');
-  const taBtn = document.getElementById('mode-timeattack-btn');
-
-  const lvl = parseInt(localStorage.getItem('bolitasLevel') || '1');
-
-  // Time Attack (Level 30+)
-  if (lvl >= 30) {
-    taBtn.classList.remove('locked-mode');
-    taBtn.querySelector('small').textContent = '8×8 🏆';
-    if (!localStorage.getItem('alerted_timeattack_30')) {
-      localStorage.setItem('alerted_timeattack_30', 'true');
-      document.getElementById('unlocked-mode-name').innerText = "⏱️";
-      document.getElementById('unlocked-mode-desc').innerText = "8×8 🏆";
-      document.getElementById('mode-unlocked-screen').classList.remove('hidden');
-    }
-
-    // Add glow and badge if unlocked but not played yet
-    if (!localStorage.getItem('hasPlayedTimeAttack')) {
-      taBtn.classList.add('new-mode-glow');
-      taBtn.querySelector('span').innerHTML = '⏱️ Ranking <span class="new-badge">🆕</span>';
-    } else {
-      taBtn.classList.remove('new-mode-glow');
-      taBtn.querySelector('span').innerHTML = '⏱️ Ranking';
-    }
-  } else {
-    taBtn.classList.add('locked-mode');
-    taBtn.querySelector('span').innerHTML = '⏱️ Ranking 🔒';
-    taBtn.querySelector('small').textContent = '🔒 30';
-    taBtn.classList.remove('new-mode-glow');
-  }
-
-  // Zen Mode (Level 50+)
-  if (lvl >= 50) {
-    zenBtn.classList.remove('locked-mode');
-    zenBtn.querySelector('small').textContent = '10×10 ∞';
-    if (!localStorage.getItem('alerted_zen_50')) {
-      localStorage.setItem('alerted_zen_50', 'true');
-      document.getElementById('unlocked-mode-name').innerText = "🧘";
-      document.getElementById('unlocked-mode-desc').innerText = "∞";
-      document.getElementById('mode-unlocked-screen').classList.remove('hidden');
-    }
-
-    if (!localStorage.getItem('hasPlayedZen')) {
-      zenBtn.classList.add('new-mode-glow');
-      zenBtn.querySelector('span').innerHTML = '🧘 Zen <span class="new-badge">🆕</span>';
-    } else {
-      zenBtn.classList.remove('new-mode-glow');
-      zenBtn.querySelector('span').innerHTML = '🧘 Zen';
-    }
-  } else {
-    zenBtn.classList.add('locked-mode');
-    zenBtn.querySelector('span').innerHTML = '🧘 Zen 🔒';
-    zenBtn.querySelector('small').textContent = '🔒 50';
-    zenBtn.classList.remove('new-mode-glow');
-  }
-}
+// updateModeButtons removed — only Career mode exists now
 
 function checkPossibleMoves() {
   return findValidGroup() !== null;
@@ -1265,6 +2061,7 @@ function clearHint() {
 }
 
 function showHint() {
+  if (isTutorialActive()) return;
   const group = findValidGroup();
   if (!group) return;
 
@@ -1276,110 +2073,347 @@ function showHint() {
   });
 }
 
-async function showGameOver(timeout = false) {
-  if (isAudioEnabled) playGameOverSound();
+async function showGameOver(isWin = false) {
+  if (!isWin) {
+    const _failConfig = getCurrentLevelConfig();
+    analyticsManager.logCustomEvent(analyticsManager.Events.LEVEL_FAIL, {
+      [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
+      [analyticsManager.Params.BIOME_NAME]: _failConfig?.biome || 'unknown',
+      [analyticsManager.Params.DIFFICULTY]: _failConfig?.difficulty || 'unknown',
+      [analyticsManager.Params.FAIL_REASON]: 'no_moves',
+      [analyticsManager.Params.SCORE_ACHIEVED]: score
+    });
+  }
+
+  document.querySelector('.app-footer')?.classList.add('hidden');
+  // Clear-board win condition: if board is empty, it's ALWAYS a win
+  if (!isWin && isBoardClear()) {
+     handleLevelComplete();
+     return;
+  }
+
+  if (!isWin && isAudioEnabled) playGameOverSound();
   clearInterval(timerInterval);
 
   const title = document.querySelector('#game-over h2');
-  if (timeout) {
-    title.innerText = "⏱️ Time up!";
-  } else {
-    title.innerText = "🚫 You lose";
+  title.innerText = t('you_lose');
+
+  // Lives countdown animation (adventure mode only)
+  const livesWrap = document.getElementById('go-lives-wrap');
+  if (livesWrap) {
+    if (currentMode === 'adventure' && !isWin) {
+      const livesNow = getLives();
+      const livesAfter = Math.max(0, livesNow - 1);
+      const beforeEl = document.getElementById('go-lives-before');
+      const afterEl = document.getElementById('go-lives-after');
+      beforeEl.textContent = livesNow;
+      afterEl.textContent = livesAfter;
+      beforeEl.classList.remove('go-fade-out');
+      afterEl.classList.remove('go-fade-in');
+      livesWrap.classList.remove('hidden');
+      setTimeout(() => {
+        beforeEl.classList.add('go-fade-out');
+        afterEl.classList.add('go-fade-in');
+      }, 900);
+    } else {
+      livesWrap.classList.add('hidden');
+    }
   }
 
+  const config = getCurrentLevelConfig();
   document.getElementById('final-score').innerText = score;
-  if (currentMode === 'adventure' && !timeout) {
-    document.getElementById('play-again-btn').innerText = "🔄 Retry";
-    document.getElementById('play-again-btn').dataset.action = 'retry';
+  document.getElementById('required-score').innerText = config.target;
 
-    // Track failures for dynamic difficulty
-    let fails = parseInt(localStorage.getItem('bolitasLevelFails') || '0');
-    localStorage.setItem('bolitasLevelFails', fails + 1);
+  if (currentMode === 'adventure') {
+    document.getElementById('play-again-btn').innerHTML = `<svg class="btn-icon"><use href="#icon-retry"></use></svg> ${t('retry')}`;
+    document.getElementById('play-again-btn').dataset.action = 'retry';
   } else {
-    document.getElementById('play-again-btn').innerText = "🏠";
+    document.getElementById('play-again-btn').innerHTML = `<svg class="btn-icon"><use href="#icon-home"></use></svg> ${t('back_to_menu')}`;
     document.getElementById('play-again-btn').dataset.action = 'menu';
   }
 
   const reviveBtn = document.getElementById('revive-btn');
-  if ((currentMode === 'timeattack' || currentMode === 'adventure') && !hasUsedRevive && score > 0) {
-    if (currentMode === 'timeattack') {
-      reviveBtn.innerText = "🎥 AD +15s";
+  const pityBtn = document.getElementById('pity-revive-btn');
+  let fails = parseInt(localStorage.getItem('bolitasLevelFails') || '0');
+
+  if (currentMode === 'adventure' && !isWin) {
+    // Increment fails for ad offers
+    fails++;
+    localStorage.setItem('bolitasLevelFails', fails);
+  }
+
+  if (currentMode === 'adventure' && !hasUsedRevive && score > 0) {
+    if (fails >= 4) {
+      // Show Pity Reward instead of normal revive
+      reviveBtn.classList.add('hidden');
+      if (pityBtn) {
+        pityBtn.innerHTML = `<svg class="btn-icon"><use href="#icon-tv"></use></svg> ${t('pity_revive_btn')}`;
+        pityBtn.classList.remove('hidden');
+      }
     } else {
-      reviveBtn.innerText = "🎥 AD Continue";
+      // Normal Revive
+      if (pityBtn) pityBtn.classList.add('hidden');
+      reviveBtn.innerHTML = `<svg class="btn-icon"><use href="#icon-tv"></use></svg> ${t('revive_ad')}`;
+      reviveBtn.classList.remove('hidden');
     }
-    reviveBtn.classList.remove('hidden');
     prepareRewarded(); // pre-load in background
   } else {
     reviveBtn.classList.add('hidden');
+    if (pityBtn) pityBtn.classList.add('hidden');
   }
 
   document.getElementById('game-over').classList.remove('hidden');
-
-  FirebaseAnalytics.logEvent({
-    name: 'game_over',
-    params: {
-      mode: currentMode,
-      level: currentLevelIndex + 1,
-      score: score,
-      timeout: timeout
-    }
-  });
-
-  // Show interstitial immediately for modes that don't have a rewarded button flow
-  // (Zen never has the revive btn, so show interstitial now)
-  if (currentMode === 'zen') {
-    prepareInterstitial().then(() => showInterstitialAd());
-  }
-
-  if (currentUser && score > 0 && currentMode === 'timeattack') {
-    try {
-      await saveScore(currentUser, score);
-    } catch (e) {
-      console.error("Failed to save score:", e);
-    }
-  }
 }
 
 function handleLevelComplete() {
-  if (isAudioEnabled) playGameOverSound(); // Maybe play a success sound later
+  document.querySelector('.app-footer')?.classList.add('hidden');
+  // Guard: prevent duplicate calls in the same game session
+  if (window._levelCompleteHandled) return;
+  window._levelCompleteHandled = true;
+
+  if (isAudioEnabled) playWinSound();
   clearInterval(timerInterval);
 
-  currentLevelIndex++;
-  localStorage.setItem('bolitasLevel', currentLevelIndex);
-  localStorage.removeItem('bolitasLevelFails'); // Reset fails on success
+  const completedLevel = currentLevelIndex; // level just beaten (0-indexed)
+  const savedMaxLevel = parseInt(localStorage.getItem('bolitasLevel')) || 0;
+  const isNewLevel = completedLevel >= savedMaxLevel; // first-time completion
 
-  FirebaseAnalytics.logEvent({
-    name: 'level_complete',
-    params: {
-      mode: 'adventure',
-      level: currentLevelIndex // This is the level that was just completed
-    }
+  // Only advance saved progress if this is a new level
+  if (isNewLevel) {
+    currentLevelIndex = completedLevel + 1;
+    localStorage.setItem('bolitasLevel', currentLevelIndex);
+    analyticsManager.setUserProperty('highest_level', String(currentLevelIndex));
+    const totalCompleted = parseInt(localStorage.getItem('bolitasTotalLevelsCompleted') || '0') + 1;
+    localStorage.setItem('bolitasTotalLevelsCompleted', totalCompleted);
+    analyticsManager.setUserProperty('total_levels_completed', String(totalCompleted));
+    FirebaseCrashlytics.setCustomKey({ key: 'highest_level', value: String(currentLevelIndex) }).catch(() => {});
+  } else {
+    // Replaying old level — move to next level for the session but don't overwrite saved max
+    currentLevelIndex = completedLevel + 1;
+  }
+  localStorage.removeItem('bolitasLevelFails');
+
+  // Snapshot quest states before tracking
+  const questsBefore = getDailyQuests().map(q => q.isComplete);
+
+  // Track economy
+  trackLevelComplete();
+  trackSingleGameScore(score);
+
+  // Detect newly completed quests
+  const questsAfter = getDailyQuests().map(q => q.isComplete);
+  const newlyCompleted = [];
+  questsAfter.forEach((done, i) => {
+    if (done && !questsBefore[i]) newlyCompleted.push(i);
   });
-
-  updateModeButtons();
-
-  const title = document.querySelector('#game-over h2');
-  const WIN_TITLES = ['Great! 🎉', 'WOW! 🔥', 'Winner! 🏆', 'Amazing! ⚡', 'Brilliant! ✨', 'Nailed it! 💥'];
-  title.innerText = WIN_TITLES[Math.floor(Math.random() * WIN_TITLES.length)];
-  document.getElementById('final-score').innerText = score;
-  document.getElementById('play-again-btn').innerText = "▶️ Next LVL";
-  document.getElementById('play-again-btn').dataset.action = 'next';
-  document.getElementById('revive-btn').classList.add('hidden');
-  document.getElementById('game-over').classList.remove('hidden');
-
-  // Interstitial every 10 levels starting from level 10
-  if (currentLevelIndex >= 10 && currentLevelIndex % 10 === 0) {
-    prepareInterstitial().then(() => showInterstitialAd());
+  
+  const questsArea = document.getElementById('win-quests-area');
+  if (newlyCompleted.length > 0) {
+    window._questJustCompletedIndices = newlyCompleted;
+    if (questsArea) {
+      questsArea.classList.remove('hidden');
+      renderWinQuests(newlyCompleted);
+    }
+  } else {
+    if (questsArea) questsArea.classList.add('hidden');
   }
 
-  // Mode unlock notifications are handled automatically by updateModeButtons() when called above
-  // if currentLevelIndex reaches 30 or 50. No need for alerts here.
+  const _completeConfig = getCurrentLevelConfig();
+  analyticsManager.logCustomEvent(analyticsManager.Events.LEVEL_COMPLETE, {
+    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
+    [analyticsManager.Params.BIOME_NAME]: _completeConfig?.biome || 'unknown',
+    [analyticsManager.Params.DIFFICULTY]: _completeConfig?.difficulty || 'unknown',
+    [analyticsManager.Params.SCORE]: score,
+    [analyticsManager.Params.BOOSTERS_USED]: Object.keys(boostersUsedInLevel).length
+  });
+
+  // --- Show Win Screen with paced animations ---
+  const levelToCheck = completedLevel + 1;
+  const levelData = getLevelData(levelToCheck);
+  const isBossLevel = (levelToCheck > 0 && levelToCheck % 15 === 0);
+  let baseCoins = 0;
+
+  if (isBossLevel) {
+    baseCoins = Math.floor(Math.random() * (80 - 50 + 1)) + 50;
+  } else {
+    const diff = levelData ? levelData.difficulty : 'medium';
+    if (diff === 'easy') {
+      baseCoins = Math.floor(Math.random() * (15 - 10 + 1)) + 10;
+    } else if (diff === 'medium') {
+      baseCoins = Math.floor(Math.random() * (20 - 15 + 1)) + 15;
+    } else if (diff === 'hard') {
+      baseCoins = Math.floor(Math.random() * (25 - 20 + 1)) + 20;
+    } else if (diff === 'extreme') {
+      baseCoins = Math.floor(Math.random() * (30 - 25 + 1)) + 25;
+    } else {
+      baseCoins = Math.floor(Math.random() * (20 - 15 + 1)) + 15;
+    }
+  }
+
+  const coinsEarned = baseCoins;
+  window._winCoinsEarned = coinsEarned; // Store for x2 ad
+
+  const xpEarned = isNewLevel ? 100 + ((completedLevel + 1) * 10) : 10; // Small XP for replays
+
+  // Store unlock info for level select animation
+  if (isNewLevel) {
+    window._justUnlockedLevel = completedLevel + 1;
+  }
+
+  // Show win screen
+  const WIN_TITLES = [
+    t('win_great'),
+    t('win_perfect'),
+    t('win_winner'),
+    t('win_amazing'),
+    t('win_brilliant'),
+    t('win_nailed_it')
+  ];
+  document.getElementById('win-title').innerText = WIN_TITLES[Math.floor(Math.random() * WIN_TITLES.length)];
+  document.getElementById('win-score').innerText = score;
+  document.getElementById('win-coins').innerText = coinsEarned > 0 ? `+${coinsEarned}` : '—';
+  document.getElementById('win-xp').innerText = t('win_xp', { val: xpEarned });
+
+  // Compute final stars using the completed level's target (before currentLevelIndex was incremented)
+  const completedLevelData = getLevelData(completedLevel + 1);
+  const finalStars = getStarCount(score, completedLevelData?.target || 1);
+  const starsMap = JSON.parse(localStorage.getItem('bolitasStarsMap') || '{}');
+  if (finalStars > (starsMap[completedLevel] || 0)) {
+    starsMap[completedLevel] = finalStars;
+    localStorage.setItem('bolitasStarsMap', JSON.stringify(starsMap));
+  }
+
+  // Animate win screen stars
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById(`win-star-${i}`);
+    if (el) el.classList.remove('filled', 'pop');
+  }
+  for (let i = 1; i <= finalStars; i++) {
+    setTimeout(() => {
+      const el = document.getElementById(`win-star-${i}`);
+      if (el) { el.classList.add('filled'); el.classList.add('pop'); }
+    }, 300 + (i - 1) * 250);
+  }
+
+  // Show or hide x2 button
+  const x2Btn = document.getElementById('win-x2-btn');
+  if (coinsEarned > 0) {
+    x2Btn.classList.remove('hidden');
+    prepareRewarded(); // pre-load rewarded ad
+  } else {
+    x2Btn.classList.add('hidden');
+  }
+
+  // Show existing XP bar state first
+  const xpBefore = getXPProgress();
+  const levelBefore = getPlayerLevel();
+  document.getElementById('win-xp-bar').style.transition = 'none';
+  document.getElementById('win-xp-bar').style.width = `${xpBefore * 100}%`;
+  document.getElementById('win-level-label').innerText = `${t('player_level_display', { val: levelBefore })} — ${Math.round(getXP())}/${getXPForNextLevel()} XP`;
+
+  // Hide reward elements initially to prevent flicker from previous level
+  const rewardNotif = document.getElementById('win-reward-notif');
+  if (rewardNotif) rewardNotif.classList.add('hidden');
+  const milestoneText = document.getElementById('win-next-milestone');
+  if (milestoneText) milestoneText.classList.add('hidden');
+
+  const winScreen = document.getElementById('win-screen');
+  winScreen.classList.remove('hidden');
+  winScreen.style.display = 'flex';
+  winScreen.style.zIndex = '50000';
+
+  // Disable continue button until animation completes
+  const continueBtn = document.getElementById('win-continue-btn');
+  continueBtn.disabled = true;
+  continueBtn.style.opacity = '0.3';
+  continueBtn.style.pointerEvents = 'none';
+
+  // Animate coins after 500ms
+  setTimeout(() => {
+    if (coinsEarned > 0) {
+      // Hilera animation: coins fly from win screen to header
+      const startEl = document.getElementById('win-coins');
+      const endEl = document.getElementById('header-coin-count');
+      if (startEl && endEl) {
+        spawnFlyingCoins(Math.min(10, coinsEarned), startEl, endEl);
+      }
+      
+      addCoins(coinsEarned);
+      if (isAudioEnabled) playCoinSound();
+      
+      const headerCoins = document.getElementById('header-coin-count');
+      headerCoins.classList.remove('reward-pulse');
+      void headerCoins.offsetWidth;
+      headerCoins.classList.add('reward-pulse');
+    }
+    updateHeaderCoins();
+  }, 500);
+
+  // Animate XP bar after 1000ms
+  setTimeout(() => {
+    const result = addXP(xpEarned);
+    document.getElementById('win-xp-bar').style.transition = 'width 1.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    document.getElementById('win-xp-bar').style.width = `${getXPProgress() * 100}%`;
+    document.getElementById('win-level-label').innerText = `${t('player_level_display', { val: result.newLevel })} — ${result.newXP}/${getXPForNextLevel()} XP`;
+
+    if (result.leveledUp) {
+      document.getElementById('win-level-label').innerText += ` 🎉 ${t('level_up')}`;
+    }
+
+    // --- Milestone Rewards (Every 5 XP levels) ---
+    const rewardNotif = document.getElementById('win-reward-notif');
+    const milestoneText = document.getElementById('win-next-milestone');
+    const playerLvl = getPlayerLevel();
+    const nextRewardLvl = playerLvl + (5 - (playerLvl % 5));
+
+    // Check if XP leveled up into a milestone
+    const lastRewardedXPLevel = parseInt(localStorage.getItem('lastBoosterRewardLevel') || '0');
+    const latestMilestone = Math.floor(playerLvl / 5) * 5;
+    
+    if (latestMilestone > 0 && latestMilestone > lastRewardedXPLevel) {
+      // Award booster for reaching this XP level milestone
+      const randIdx = Math.floor(Math.random() * SHOP_BOOSTERS.length);
+      const booster = SHOP_BOOSTERS[randIdx];
+      addBoosterFree(booster.id, 1);
+      localStorage.setItem('lastBoosterRewardLevel', String(latestMilestone));
+      
+      if (rewardNotif) {
+        rewardNotif.classList.remove('hidden');
+        document.getElementById('win-reward-icon').innerText = booster.icon;
+        document.getElementById('win-reward-text').innerText = t('milestone_booster_unlocked', { booster: t(`booster_${booster.id}_name`) });
+      }
+      if (milestoneText) {
+        milestoneText.innerText = t('next_reward_at', { val: nextRewardLvl });
+      }
+    } else {
+      if (rewardNotif) rewardNotif.classList.add('hidden');
+      if (milestoneText) {
+        if (playerLvl % 5 === 4) {
+          const xpLeft = getXPToNextReward();
+          milestoneText.innerText = t('xp_left_for_reward', { val: xpLeft });
+          milestoneText.classList.remove('hidden');
+        } else {
+          milestoneText.classList.add('hidden');
+        }
+      }
+    }
+
+    // Enable continue button after XP bar animation finishes (1.5s transition)
+    setTimeout(() => {
+      continueBtn.disabled = false;
+      continueBtn.style.opacity = '1';
+      continueBtn.style.pointerEvents = 'auto';
+    }, 1600);
+  }, 1000);
+
+  // Interstitial logic now handled in "Continuar" button click handler to avoid race conditions
 }
+
 
 function isBoardClear() {
   for (let r = 0; r < currentRows; r++) {
     for (let c = 0; c < currentCols; c++) {
-      if (grid[r][c] !== null) return false;
+      if (grid[r] && grid[r][c]) return false;
     }
   }
   return true;
@@ -1388,6 +2422,7 @@ function isBoardClear() {
 function showCelebration() {
   clearInterval(timerInterval);
   clearTimeout(hintTimeout);
+  trackBoardClear();
 
   document.getElementById('celebration-score').innerText = score;
   document.getElementById('clear-celebration').classList.remove('hidden');
@@ -1411,124 +2446,1048 @@ function showCelebration() {
   }
 }
 
-// Tutorial system — interactive mini-level
-let isTutorialActive = false;
-let tutorialPhase = 'select'; // 'select' | 'pop'
-
-function positionTutorialHand(targetEl) {
-  const hand = document.getElementById('tutorial-hand');
-  const screen = document.getElementById('tutorial-screen');
-  const containerRect = document.getElementById('game-container').getBoundingClientRect();
-  const targetRect = targetEl.getBoundingClientRect();
-
-  // Center the hand over the target bolita
-  const left = (targetRect.left - containerRect.left) + targetRect.width / 2;
-  const top = (targetRect.top - containerRect.top) + targetRect.height / 2;
-
-  hand.style.left = `${left}px`;
-  hand.style.top = `${top}px`;
-  hand.style.transform = 'translate(-50%, -70%)';
-  hand.style.display = 'block';
-
-  screen.classList.remove('hidden');
-}
-
-function hideTutorialHand() {
-  document.getElementById('tutorial-hand').style.display = 'none';
-  document.getElementById('tutorial-screen').classList.add('hidden');
-}
-
 function showTutorial() {
-  isTutorialActive = true;
-  tutorialPhase = 'select';
+  showAdventureTutorial({
+    t,
+    uiGrid,
+    createBolita,
+    showBannerAd,
+    grid,
+    clearGrid: (rows, cols) => {
+      grid = Array.from({ length: rows }, () => new Array(cols).fill(null));
+      uiGrid.innerHTML = '';
+    },
+    setHeaderMode: (text) => uiHeaderMode.innerText = text,
+    setHeaderScoreDetails: () => updateStarDisplay()
+  });
+}
 
-  // Hide main menu, show game UI
-  document.getElementById('login-screen').classList.add('hidden');
-  if (isAudioEnabled) {
-    bgmAudio.play().catch(e => console.log('Autoplay prevented'));
+
+// ======================== NEW UI FUNCTIONS ========================
+
+function updateHeaderCoins() {
+  const coins = getCoins();
+  document.getElementById('header-coin-count').innerText = coins.toLocaleString();
+  analyticsManager.setUserProperty('total_coins', coins);
+  
+  const mapEl = document.getElementById('header-coin-count-map');
+  if (mapEl) mapEl.innerText = coins.toLocaleString();
+
+  // Re-evaluation for shop claimables (calendar)
+  updateShopNotifications();
+}
+
+/**
+ * Creates a "hilera" (row) of flying coins from start point to destination.
+ */
+function spawnFlyingCoins(count, startEl, endEl) {
+  const startRect = startEl.getBoundingClientRect();
+  const endRect = endEl.getBoundingClientRect();
+  const container = document.getElementById('game-container');
+  const containerRect = container.getBoundingClientRect();
+
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => {
+      const coin = document.createElement('div');
+      coin.className = 'flying-coin';
+      coin.innerText = '🪙';
+      coin.style.left = (startRect.left + startRect.width / 2 - containerRect.left) + 'px';
+      coin.style.top = (startRect.top + startRect.height / 2 - containerRect.top) + 'px';
+      container.appendChild(coin);
+
+      // Play sound for each coin in the sequence
+      if (isAudioEnabled) playCoinSound();
+
+      // Force reflow
+      void coin.offsetWidth;
+
+      const destX = endRect.left + endRect.width / 2 - 10;
+      const destY = endRect.top + endRect.height / 2 - 10;
+
+      coin.style.transform = `translate(${destX - (startRect.left + startRect.width / 2)}px, ${destY - (startRect.top + startRect.height / 2)}px) scale(1.5)`;
+      coin.style.opacity = '1';
+
+      setTimeout(() => {
+        coin.remove();
+        // Visual feedback on total counter
+        endEl.classList.remove('reward-pulse');
+        void endEl.offsetWidth;
+        endEl.classList.add('reward-pulse');
+      }, 800);
+    }, i * 100);
+  }
+}
+
+function updateMenuPlayerLevel() {
+  const currentLevel = getPlayerLevel();
+  const xp = getXP();
+  const xpNeeded = getXPForNextLevel();
+  const pct = getXPProgress();
+  
+  analyticsManager.setUserProperty('player_level', currentLevel);
+
+  // Floating profile header
+  const levelText = document.getElementById('menu-player-level-text');
+  if (levelText) levelText.innerText = t('player_level_display', { val: currentLevel });
+  const usernameEl = document.getElementById('menu-username-display');
+  if (usernameEl) usernameEl.innerText = currentUser || '';
+
+  // User Settings panel
+  const settingsName = document.getElementById('user-settings-name');
+  if (settingsName) settingsName.innerText = currentUser || '';
+  const settingsLevel = document.getElementById('user-settings-level');
+  if (settingsLevel) settingsLevel.innerText = t('player_level_display', { val: currentLevel });
+  const settingsBar = document.getElementById('user-settings-xp-bar');
+  if (settingsBar) settingsBar.style.width = `${pct * 100}%`;
+  const settingsLabel = document.getElementById('user-settings-xp-label');
+  if (settingsLabel) settingsLabel.innerText = t('xp_label', { current: xp, total: xpNeeded });
+  
+  updateFooterQuestsGlow();
+}
+
+function updateFooterQuestsGlow() {
+  const questsTab = document.getElementById('footer-tab-quests');
+  if (!questsTab) return;
+  
+  const hasRewards = hasClaimableQuests();
+  questsTab.classList.toggle('glow-slow', hasRewards);
+
+  // Also update shop sync for calendar notifications
+  updateShopNotifications();
+}
+
+// openShop and renderShopItems are now imported from shop.js
+
+let currentQuestTab = 'daily';
+
+function openQuests() {
+  currentQuestTab = 'daily';
+  document.getElementById('shop-screen').classList.add('hidden');
+  document.getElementById('biome-map-screen')?.classList.add('hidden');
+  // Set up tab switching
+  document.querySelectorAll('.quest-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.qtab === 'daily');
+    tab.onclick = () => {
+      currentQuestTab = tab.dataset.qtab;
+      document.querySelectorAll('.quest-tab').forEach(t => t.classList.toggle('active', t === tab));
+      renderQuests();
+    };
+  });
+  renderQuests();
+  updateQuestCountdown();
+  document.getElementById('quests-screen').classList.remove('hidden');
+  syncFooterTabs('quests');
+  updateFooterQuestsGlow();
+}
+
+let questCountdownInterval = null;
+function updateQuestCountdown() {
+  if (questCountdownInterval) clearInterval(questCountdownInterval);
+  
+  const el = document.getElementById('quest-reset-countdown');
+  const tick = () => {
+    const isWeekly = currentQuestTab === 'weekly';
+    const nextReset = isWeekly ? getNextWeeklyReset() : getNextDailyReset();
+    const diff = nextReset - Date.now();
+    
+    if (diff <= 0) {
+      el.innerText = t('refresh_available');
+      renderQuests(); // Auto-refresh UI when timer hits zero
+      return;
+    }
+    
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    
+    let timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    if (diff > 86400000) {
+      const d = Math.floor(diff / 86400000);
+      timeStr = `${d}d ${timeStr}`;
+    }
+    const resetLabel = isWeekly ? t('weekly_reset_in', { time: timeStr }) : t('daily_reset_in', { time: timeStr });
+    el.innerText = resetLabel;
+  };
+  
+  tick();
+  questCountdownInterval = setInterval(() => {
+    if (document.getElementById('quests-screen').classList.contains('hidden')) {
+      clearInterval(questCountdownInterval);
+      return;
+    }
+    tick();
+  }, 1000);
+}
+
+function getQuestDescription(quest) {
+  const params = { target: quest.target };
+  if (quest.color) params.color = t(`color_${quest.color}`);
+  if (quest.minSize) params.minSize = quest.minSize;
+  if (quest.mode) params.mode = t(quest.mode);
+
+  return t(`quest_${quest.type}`, params);
+}
+
+function renderQuests() {
+  const container = document.getElementById('quest-list-container');
+  container.innerHTML = '';
+
+  const isWeekly = currentQuestTab === 'weekly';
+  const quests = isWeekly ? getWeeklyQuests() : getDailyQuests();
+  const claimFn = isWeekly ? claimWeeklyQuest : claimQuest;
+  const swapFn = isWeekly ? swapWeeklyQuest : swapQuest;
+
+  quests.forEach((quest, index) => {
+    const card = document.createElement('div');
+    card.className = `quest-card ${quest.isComplete ? 'completed' : ''}`;
+    const pct = Math.min((quest.progress / quest.target) * 100, 100);
+
+    card.innerHTML = `
+      <div class="quest-icon">${quest.icon}</div>
+      <div class="quest-info">
+        <div class="quest-name">${getQuestDescription(quest)}</div>
+        <div class="quest-progress-text">${quest.progress}/${quest.target}</div>
+        <div class="quest-progress-bar"><div class="quest-progress-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;">
+        <div class="quest-reward">🪙 ${quest.reward}</div>
+        ${quest.isComplete && !quest.claimed
+        ? `<button class="quest-claim-btn" data-idx="${index}">${t('quest_claim')}</button>`
+        : !quest.isComplete
+          ? `<button class="quest-swap-btn" data-idx="${index}" title="${t('quest_swap_hint')}">🔄</button>`
+          : '<span style="font-size:0.8rem;color:var(--clr-green);">✓</span>'}
+      </div>
+    `;
+
+    // Claim button
+    const claimBtn = card.querySelector('.quest-claim-btn');
+    if (claimBtn) {
+      claimBtn.addEventListener('click', () => {
+        const reward = claimFn(index);
+        if (reward > 0) {
+          if (isAudioEnabled) playCoinSound();
+          
+          card.classList.add('claiming');
+
+          const headerCoins = document.getElementById('header-coin-count');
+          headerCoins.classList.remove('reward-pulse');
+          void headerCoins.offsetWidth;
+          headerCoins.classList.add('reward-pulse');
+          
+          updateHeaderCoins();
+          updateFooterQuestsGlow();
+          setTimeout(() => {
+            renderQuests();
+          }, 400);
+        }
+      });
+    }
+
+    // Swap button
+    const swapBtn = card.querySelector('.quest-swap-btn');
+    if (swapBtn) {
+      swapBtn.addEventListener('click', () => {
+        if (isWeekly) {
+          showRewardedAd('swap_weekly_quest', index);
+        } else {
+          showRewardedAd('swap_quest', index);
+        }
+      });
+    }
+
+    container.appendChild(card);
+  });
+
+  // Update tabs glow individually
+  const dailyTab = document.querySelector('.quest-tab[data-qtab="daily"]');
+  if (dailyTab) dailyTab.classList.toggle('glow-slow', hasClaimableDailyQuests());
+
+  const weeklyTab = document.querySelector('.quest-tab[data-qtab="weekly"]');
+  if (weeklyTab) weeklyTab.classList.toggle('glow-slow', hasClaimableWeeklyQuests());
+}
+function renderWinQuests(indices) {
+  const container = document.getElementById('win-quests-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const quests = getDailyQuests();
+  indices.forEach(index => {
+    const quest = quests[index];
+    if (!quest) return;
+
+    const card = document.createElement('div');
+    card.className = `quest-card win-quest ${quest.isComplete ? 'completed' : ''}`;
+    
+    card.innerHTML = `
+      <div class="quest-icon">${quest.icon}</div>
+      <div class="quest-info">
+        <div class="quest-name">${getQuestDescription(quest)}</div>
+        <div class="quest-reward">🪙 ${quest.reward}</div>
+      </div>
+      ${quest.isComplete && !quest.claimed
+        ? `<button class="quest-claim-btn" data-idx="${index}">${t('quest_claim')}</button>`
+        : '<span class="quest-done-check">✓</span>'}
+    `;
+
+    const claimBtn = card.querySelector('.quest-claim-btn');
+    if (claimBtn) {
+      claimBtn.addEventListener('click', () => {
+        const reward = claimQuest(index);
+        if (reward > 0) {
+          if (isAudioEnabled) playCoinSound();
+          card.classList.add('claiming');
+          updateHeaderCoins();
+          updateFooterQuestsGlow();
+          setTimeout(() => {
+            renderWinQuests(indices);
+          }, 400);
+        }
+      });
+    }
+    container.appendChild(card);
+  });
+}
+
+function updateLivesUI() {
+  const lives = getLives();
+  const secs = getRemainingTime();
+  const timerText = secs > 0
+    ? `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`
+    : '';
+
+  const mapCount = document.getElementById('header-lives-count-map');
+  const mapTimer = document.getElementById('header-lives-timer-map');
+  if (mapCount) mapCount.textContent = lives;
+  if (mapTimer) {
+    mapTimer.textContent = timerText;
+    mapTimer.classList.toggle('hidden', !timerText);
   }
 
-  // Set up a 3x3 grid
+  const gameCount = document.getElementById('header-lives-count');
+  if (gameCount) gameCount.textContent = lives;
+
+  const outTimerEl = document.getElementById('out-of-lives-timer-text');
+  if (outTimerEl) {
+    outTimerEl.textContent = secs > 0 ? t('out_of_lives_timer', { time: timerText }) : '';
+  }
+}
+
+// Update the fixed header with current player state
+function updateMapHeader() {
+  const coins = getCoins();
+  const headerCoinEl = document.getElementById('header-coin-count-map');
+  if (headerCoinEl) headerCoinEl.innerText = coins.toLocaleString();
+  const headerLevelEl = document.getElementById('app-header-level');
+  if (headerLevelEl) {
+    const pLvl = getPlayerLevel();
+    headerLevelEl.innerText = `${currentUser || 'Player'} LVL ${pLvl}`;
+  }
+  updateLivesUI();
+}
+function showBiomeCompletedOverlay() {
+  let overlay = document.getElementById('biome-completed-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'biome-completed-overlay';
+    overlay.className = 'overlay';
+    overlay.style.zIndex = '35000';
+    overlay.style.background = 'rgba(0,0,0,0.85)';
+    
+    const panel = document.createElement('div');
+    panel.style.textAlign = 'center';
+    
+    const title = document.createElement('h1');
+    title.className = 'celebration-title';
+    title.innerText = t('biome_completed') || 'Biome Completed!';
+    
+    const confettiLayer = document.createElement('div');
+    confettiLayer.className = 'confetti-fx';
+    
+    panel.appendChild(title);
+    overlay.appendChild(confettiLayer);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+  }
+  overlay.classList.remove('hidden');
+  overlay.classList.remove('fade-out');
+  overlay.classList.add('fade-in');
+  
+  const confettiLayer = overlay.querySelector('.confetti-fx');
+  confettiLayer.innerHTML = '';
+  const colors = ['#0ff', '#f0f', '#ff0', '#0f0'];
+  for(let i=0; i<40; i++) {
+    const p = document.createElement('div');
+    p.className = 'neon-confetti';
+    p.style.left = (Math.random() * 100) + '%';
+    p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+    p.style.animationDelay = (Math.random() * 0.5) + 's';
+    p.style.boxShadow = `0 0 8px ${p.style.backgroundColor}`;
+    confettiLayer.appendChild(p);
+  }
+}
+
+function hideBiomeCompletedOverlay() {
+  const overlay = document.getElementById('biome-completed-overlay');
+  if (overlay) {
+    overlay.classList.remove('fade-in');
+    overlay.classList.add('fade-out');
+    setTimeout(() => overlay.classList.add('hidden'), 500);
+  }
+}
+
+function showLevelSelect(justUnlockedLevel = null) {
   currentMode = 'adventure';
-  currentRows = 3;
-  currentCols = 3;
-  currentColorSet = COLORS;
-  score = 0;
+  document.getElementById('powerups-bar').classList.add('hidden');
+  document.querySelector('.app-footer')?.classList.remove('hidden');
+  syncFooterTabs('map');
+  const container = document.getElementById('biome-map-container');
+  container.innerHTML = '';
+
+  const milestoneEl = document.getElementById('level-select-milestone');
+  if (milestoneEl) {
+    try {
+      const playerLvl = getPlayerLevel();
+      if (playerLvl % 5 === 4) {
+        const xpLeft = getXPToNextReward();
+        milestoneEl.innerText = t('xp_left_for_reward', { val: xpLeft });
+        milestoneEl.classList.remove('hidden');
+      } else {
+        milestoneEl.classList.add('hidden');
+      }
+    } catch (e) {
+      console.error("Error updating milestone text:", e);
+    }
+  }
+
+  // Safety: ensure no tutorials are locking the screen when we enter the map
+  abortActiveTutorial();
+
+  const maxUnlocked = parseInt(localStorage.getItem('bolitasLevel')) || 0;
+  const starsMap = JSON.parse(localStorage.getItem('bolitasStarsMap') || '{}');
+  const currentGlobalLevel = maxUnlocked + 1;
+  const { currentBlock, maxVisibleBlock } = getVisibleBiomeRange(currentGlobalLevel);
+
+  const totalVisible = maxVisibleBlock + 1;
+  let scrollTarget = null;
+  
+  // Clean container
+  container.innerHTML = '';
+
+  for (let blockIdx = 0; blockIdx < totalVisible; blockIdx++) {
+    const biomeBlock = generateBiomeBlock(blockIdx);
+    const firstLevel = blockIdx * 15 + 1;
+    const isRevealed = isBiomeRevealed(blockIdx, maxUnlocked);
+    const isCurrentBiome = blockIdx === currentBlock;
+    const isFog = !isRevealed && !isCurrentBiome;
+
+    const card = document.createElement('div');
+    card.className = 'biome-block-card';
+
+    // Background image layer
+    const bgDiv = document.createElement('div');
+    bgDiv.className = 'biome-card-bg';
+    if (biomeBlock.imagePath) {
+      bgDiv.style.backgroundImage = `url(${biomeBlock.imagePath})`;
+    } else if (biomeBlock.themeColors && biomeBlock.themeColors.length > 0) {
+      bgDiv.style.background = `linear-gradient(135deg, ${biomeBlock.themeColors.join(', ')})`;
+      bgDiv.style.opacity = '1';
+    }
+    card.appendChild(bgDiv);
+
+    // Content wrapper
+    const content = document.createElement('div');
+    content.className = 'biome-card-content';
+
+    if (isRevealed || isCurrentBiome) {
+      card.classList.add('revealed');
+    } else {
+      card.classList.add('locked', 'fog-card');
+    }
+    if (isCurrentBiome) card.classList.add('current-biome');
+
+    // Header with biome name
+    const header = document.createElement('div');
+    header.className = 'biome-block-header';
+    header.style.pointerEvents = 'none'; // Ensure clicks pass through to grid behind if needed, though they are siblings
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'biome-block-name';
+    nameEl.innerText = (isRevealed || isCurrentBiome) ? t(biomeBlock.biomeName) : `${t('biome_unknown')} #${biomeBlock.blockId}`;
+
+    const idEl = document.createElement('div');
+    idEl.className = 'biome-block-id';
+    idEl.innerText = `#${biomeBlock.blockId}`;
+
+    header.appendChild(nameEl);
+    header.appendChild(idEl);
+    content.appendChild(header);
+
+    // Level grid (15 fragment slots in 5x3)
+    const levelGrid = document.createElement('div');
+    levelGrid.className = 'biome-level-grid';
+
+    for (let i = 0; i < 15; i++) {
+      const globalLevel = firstLevel + i;
+      const levelIdx = globalLevel - 1;
+      const levelData = biomeBlock.levels[i];
+
+      const cell = document.createElement('div');
+      cell.className = 'level-cell';
+
+      if (levelIdx < maxUnlocked) {
+        cell.classList.add('completed');
+        if (levelData) cell.classList.add(`level-diff-${levelData.difficulty}`);
+        cell.addEventListener('click', () => showLevelPreStartScreen(levelIdx));
+        const numEl = document.createElement('span');
+        numEl.className = 'cell-level-num';
+        numEl.innerText = globalLevel;
+        cell.appendChild(numEl);
+        const cellStars = starsMap[levelIdx] || 0;
+        const starsEl = document.createElement('div');
+        starsEl.className = 'cell-stars';
+        for (let s = 1; s <= 3; s++) {
+          const star = document.createElement('span');
+          star.className = 'cell-star' + (s <= cellStars ? ' filled' : '');
+          star.innerText = '★';
+          starsEl.appendChild(star);
+        }
+        cell.appendChild(starsEl);
+      } else if (levelIdx === maxUnlocked) {
+        cell.classList.add('current');
+        if (levelData) cell.classList.add(`level-diff-${levelData.difficulty}`);
+        cell.addEventListener('click', () => showLevelPreStartScreen(levelIdx));
+        cell.innerText = globalLevel;
+        scrollTarget = card;
+      } else {
+        cell.classList.add('locked');
+        cell.innerText = '🔒';
+      }
+
+      levelGrid.appendChild(cell);
+    } // End of level cells loop (i)
+
+    // Auto-reveal and handle biome animation if this was just unlocked
+    if (justUnlockedLevel !== null) {
+      // Find if this block contains the just unlocked level
+      if (justUnlockedLevel >= firstLevel && justUnlockedLevel <= firstLevel + 14) {
+        const relativeIdx = justUnlockedLevel - firstLevel;
+        const targetCell = levelGrid.children[relativeIdx];
+        
+        if (targetCell) {
+          targetCell.classList.add('new-unlocked');
+          // Lock UI during this whole sequence
+          document.body.classList.add('ui-locked');
+
+          setTimeout(() => {
+            targetCell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // If it's the first level of the block, that means we JUST finished the previous block!
+            if (relativeIdx === 0 && firstLevel > 1) {
+              const prevCard = card.nextElementSibling; // mapContainer is column-reverse, so prev is next sibling
+              
+              if (prevCard) {
+                // Hide new card immediately so it doesn't flash before the reveal animation
+                card.style.opacity = '0';
+                card.style.pointerEvents = 'none';
+
+                // Focus on previous card, which was just completed
+                prevCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                prevCard.classList.add('biome-completed-glow');
+
+                setTimeout(() => {
+                  showBiomeCompletedOverlay();
+
+                  setTimeout(() => {
+                    hideBiomeCompletedOverlay();
+
+                    setTimeout(() => {
+                      // Now focus on the *new* card and reveal it
+                      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      card.style.opacity = '';
+                      card.style.pointerEvents = '';
+                      card.classList.add('unlocked-reveal');
+                      targetCell.classList.add('unlocked-reveal');
+                      if (isAudioEnabled) playLevelUnlockSound();
+
+                      setTimeout(() => {
+                        document.body.classList.remove('ui-locked');
+                        // TAREAS: No auto-opening next level, letting user tap
+                      }, 1000);
+                    }, 500);
+                  }, 3000); // Overlay stays for 3s
+                }, 1000); // Wait for card glow
+              } else {
+                card.classList.add('unlocked-reveal');
+                targetCell.classList.add('unlocked-reveal');
+                if (isAudioEnabled) playLevelUnlockSound();
+                setTimeout(() => document.body.classList.remove('ui-locked'), 1000);
+              }
+            } else {
+              // Normal level unlock (not an entire biome)
+              targetCell.classList.add('unlocked-reveal');
+              if (isAudioEnabled) playLevelUnlockSound();
+              setTimeout(() => {
+                document.body.classList.remove('ui-locked');
+                // TAREAS: No auto-opening next level, letting user tap
+              }, 1000);
+            }
+          }, 500);
+        }
+      }
+    }
+
+    content.appendChild(levelGrid);
+    card.appendChild(content);
+    container.appendChild(card);
+  } // End of outer for loop (blockIdx)
+
+  updateMapHeader();
+
+  document.getElementById('biome-map-screen').classList.remove('hidden');
+
+  // Initial scroll to current biome if not animating a specific new level
+  if (justUnlockedLevel === null) {
+     scrollToCurrentBiome();
+  }
+}
+
+function scrollToCurrentBiome() {
+  const container = document.getElementById('biome-map-scroll');
+  const target = document.querySelector('.current-biome');
+  if (container && target) {
+    // Force a small reflow delay so display:block is settled
+    setTimeout(() => {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  }
+}
+
+function showLevelPreStartScreen(levelIndex) {
+  // Reset per-try ad counter
+  prestartAdsThisTry = 0;
+  // Unlock UI whenever we open a modal or manual level select
+  document.body.classList.remove('ui-locked');
+  
+  // Hide game elements to ensure clean background
+  document.querySelector('.game-area').classList.add('hidden');
+  document.getElementById('powerups-bar').classList.add('hidden');
+  
+  const prestartScreen = document.getElementById('level-prestart-screen');
+  if (!prestartScreen) return;
+
+  const config = getLevelData(levelIndex + 1);
+
+  try {
+    document.getElementById('prestart-level-title').innerText = t('level_display', { val: levelIndex + 1 });
+    document.getElementById('prestart-target').innerText = `⭐ ${config.target}`;
+    
+    let diffKey = 'diff_easy';
+    let diffColor = 'var(--clr-green)';
+    if (config.difficulty === 'medium') { diffKey = 'diff_medium'; diffColor = 'var(--clr-yellow)'; }
+    if (config.difficulty === 'hard') { diffKey = 'diff_hard'; diffColor = 'var(--clr-orange)'; }
+    if (config.difficulty === 'extreme') { diffKey = 'diff_extreme'; diffColor = 'var(--clr-red)'; }
+
+    const diffEl = document.getElementById('prestart-difficulty');
+    const translatedDiff = t(diffKey);
+    diffEl.innerText = translatedDiff.includes(':') ? translatedDiff.split(':')[1].trim().toUpperCase() : translatedDiff.toUpperCase();
+    diffEl.style.color = diffColor;
+    diffEl.style.border = `1px solid ${diffColor}`;
+
+    // No recommendation block in new UI — ad buff button is always visible
+
+    // Render quick daily quests preview 
+    const questsContainer = document.getElementById('prestart-quests-container');
+    questsContainer.innerHTML = '';
+    const dailyQuests = getDailyQuests().filter(q => !q.claimed); 
+    if (dailyQuests.length === 0) {
+      questsContainer.innerHTML = `<div style="font-size: 0.85rem; color: #fff; opacity: 0.7;">✓ All daily quests completed!</div>`;
+    } else {
+      dailyQuests.slice(0, 2).forEach(quest => { 
+        const pct = Math.min((quest.progress / quest.target) * 100, 100);
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; font-size: 0.85rem; width: 100%; color: #eee; line-height: 1.2;';
+        div.innerHTML = `
+          <div style="display:flex; align-items:center; gap:0.4rem; flex:1; min-width:0;">
+             <span>${quest.icon}</span>
+             <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${getQuestDescription(quest)}</span>
+          </div>
+          <div style="font-family: monospace; font-weight: bold; margin-left: 10px; color: ${pct >= 100 ? 'var(--clr-green)' : '#fff'};">
+             ${quest.progress}/${quest.target}
+          </div>
+        `;
+        questsContainer.appendChild(div);
+      });
+    }
+
+    prestartScreen.classList.remove('hidden');
+
+    // Handle Close
+    const closeBtn = document.getElementById('prestart-close-btn');
+    closeBtn.onclick = () => {
+      prestartScreen.classList.add('hidden');
+      returnToMainMenu();
+    };
+
+    // Handle Play
+    const playBtn = document.getElementById('prestart-play-btn');
+    playBtn.onclick = () => {
+      prestartScreen.classList.add('hidden');
+      startLevelFromSelect(levelIndex);
+    };
+  } catch (err) {
+    console.error('Error opening level prestart:', err);
+  }
+}
+
+function startLevelFromSelect(levelIndex) {
+  if (getLives() <= 0) {
+    window._pendingLevelIndex = levelIndex; // Store to restore after ad
+    document.getElementById('level-prestart-screen').classList.add('hidden');
+    document.getElementById('out-of-lives-screen').classList.remove('hidden');
+    return;
+  }
+  currentLevelIndex = levelIndex;
+  document.getElementById('biome-map-screen').classList.add('hidden');
+  document.getElementById('login-screen').classList.add('hidden');
+  if (isAudioEnabled) {
+    bgmAudio.play().catch(() => { });
+  }
+  analyticsManager.logCustomEvent(analyticsManager.Events.LEVEL_START, {
+    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+  });
+  trackGamePlayed('adventure');
+  initGame();
+}
+
+function renderPowerups() {
+  const bar = document.getElementById('powerups-bar');
+  bar.classList.remove('hidden');
+
+  document.querySelectorAll('.powerup-btn').forEach(btn => {
+    const bId = btn.dataset.booster;
+    const booster = SHOP_BOOSTERS.find(b => b.id === bId);
+    
+    let isLocked = false;
+    const level = currentLevelIndex + 1;
+    if (booster && booster.unlockLevel) {
+      if (level < booster.unlockLevel) isLocked = true;
+    }
+
+    if (isLocked) {
+      btn.style.setProperty('display', 'none', 'important');
+      return;
+    } else {
+      btn.style.display = '';
+    }
+
+    const count = getBoosterCount(bId);
+    btn.querySelector('.powerup-count').innerText = count;
+
+    if (count <= 0) {
+      btn.classList.add('empty');
+    } else {
+      btn.classList.remove('empty');
+    }
+
+    if (boostersUsedInLevel[bId]) {
+      btn.classList.add('used');
+    } else {
+      btn.classList.remove('used');
+    }
+
+    if (activePowerup === bId) {
+      btn.classList.add('active-target');
+    } else {
+      btn.classList.remove('active-target');
+    }
+  });
+}
+
+function handlePowerupClick(boosterId) {
+  if (getBoosterCount(boosterId) <= 0) return;
+  if (boostersUsedInLevel[boosterId]) {
+    playErrorSound();
+    return;
+  }
+  if (isAnimating) return;
+
+  if (activePowerup === boosterId) {
+    // Toggle off
+    activePowerup = null;
+    renderPowerups();
+    return;
+  }
+
+  // Instant actions
+  if (boosterId === 'shuffle') {
+    useBooster('shuffle');
+    analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
+      [analyticsManager.Params.BOOSTER_NAME]: 'shuffle',
+      [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+    });
+    boostersUsedInLevel['shuffle'] = true;
+    shuffleBoard();
+    renderPowerups();
+    return;
+  }
+
+  if (boosterId === 'hint_pack') {
+    useBooster('hint_pack');
+    analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
+      [analyticsManager.Params.BOOSTER_NAME]: 'hint_pack',
+      [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+    });
+    showHint();
+    renderPowerups();
+    return;
+  }
+
+
+
+  // Target actions (Bomb, Color Bomb)
+  activePowerup = boosterId;
+  clearSelectionOutline();
   selectedGroup = [];
-  isAnimating = false;
-  hintedElements = [];
+  renderPowerups();
+}
 
-  // Update header
-  uiHeaderMode.innerText = `📚 Tutorial`;
-  uiHeaderScoreDetails.innerText = `Learn the basics`;
+async function activateBombAt(r, c) {
+  isAnimating = true;
+  useBooster('bomb');
+  analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
+    [analyticsManager.Params.BOOSTER_NAME]: 'bomb',
+    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+  });
+  boostersUsedInLevel['bomb'] = true;
+  activePowerup = null;
+  renderPowerups();
+  clearSelectionOutline();
 
-  document.getElementById('game-over').classList.add('hidden');
-  document.getElementById('pass-level-btn').classList.add('hidden');
-  showBannerAd();
-  uiGrid.innerHTML = '';
+  const toPop = [];
+  for (let rr = Math.max(0, r - 1); rr <= Math.min(currentRows - 1, r + 1); rr++) {
+    for (let cc = Math.max(0, c - 1); cc <= Math.min(currentCols - 1, c + 1); cc++) {
+      if (grid[rr][cc]) toPop.push(grid[rr][cc]);
+    }
+  }
 
-  // Set CSS variables
-  document.documentElement.style.setProperty('--rows', currentRows);
-  document.documentElement.style.setProperty('--cols', currentCols);
-  uiGrid.style.aspectRatio = `${currentCols} / ${currentRows}`;
+  await executePowerupPop(toPop);
+}
 
-  // Build 3x3 grid
-  // L-shape green: (0,0), (1,0), (1,1)
-  // Fixed fillers — no groups of 3 possible
-  grid = Array.from({ length: currentRows }, () => new Array(currentCols).fill(null));
+async function activateColorBomb(color) {
+  isAnimating = true;
+  useBooster('color_bomb');
+  analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
+    [analyticsManager.Params.BOOSTER_NAME]: 'color_bomb',
+    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+  });
+  boostersUsedInLevel['color_bomb'] = true;
+  activePowerup = null;
+  renderPowerups();
+  clearSelectionOutline();
 
-  const greenPos = new Set(['0,0', '1,0', '1,1']);
-  const fillerLayout = [
-    [null, 'red', 'blue'],
-    [null, null, 'red'],
-    ['blue', 'red', 'blue'],
-  ];
-
+  const toPop = [];
   for (let r = 0; r < currentRows; r++) {
     for (let c = 0; c < currentCols; c++) {
-      if (greenPos.has(`${r},${c}`)) {
-        createBolita(r, c, 'green');
-      } else {
-        createBolita(r, c, fillerLayout[r][c]);
+      if (grid[r][c] && grid[r][c].color === color) {
+        toPop.push(grid[r][c]);
       }
     }
   }
 
-  // Apply pulsing hint to green balls
-  greenPos.forEach(key => {
-    const [r, c] = key.split(',').map(Number);
-    if (grid[r][c] && grid[r][c].el) {
-      grid[r][c].el.classList.add('hint');
-      hintedElements.push(grid[r][c].el);
-    }
+  await executePowerupPop(toPop);
+}
+
+// ======================== SNIPER ========================
+
+/**
+ * Sniper: removes a single bolita chosen by the player,
+ * then applies gravity so balls fall to fill the gap.
+ */
+async function activateSniper(r, c) {
+  if (!grid[r][c]) return;
+  isAnimating = true;
+  useBooster('sniper');
+  analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
+    [analyticsManager.Params.BOOSTER_NAME]: 'sniper',
+    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+  });
+  boostersUsedInLevel['sniper'] = true;
+  activePowerup = null;
+  renderPowerups();
+  clearSelectionOutline();
+
+  const target = grid[r][c];
+  await executePowerupPop([target]);
+}
+
+// ======================== MAGIC BRUSH ========================
+
+/** Active state for Magic Brush — stores grid position of targeted bolita. */
+let _magicBrushTarget = null;
+
+/**
+ * Shows an inline color-picker anchored near the tapped bolita.
+ * Player picks the new color → bolita changes, surrounding groups are re-evaluated.
+ */
+function showMagicBrushPicker(r, c, el) {
+  if (!grid[r][c]) return;
+
+  // Remove any existing picker
+  closeMagicBrushPicker();
+
+  _magicBrushTarget = { r, c };
+
+  // Build the colour options from the currently active palette
+  const picker = document.createElement('div');
+  picker.id = 'magic-brush-picker';
+  picker.className = 'magic-brush-picker';
+
+  const activeColors = currentColorSet.slice(0, currentColors);
+  const currentColor = grid[r][c].color;
+
+  activeColors.forEach(clr => {
+    if (clr === currentColor) return; // skip the same colour
+    const swatch = document.createElement('button');
+    swatch.className = `magic-brush-swatch bolita-color-${clr}`;
+    swatch.title = t(`color_${clr}`);
+    swatch.addEventListener('click', (e) => {
+      e.stopPropagation();
+      applyMagicBrush(_magicBrushTarget.r, _magicBrushTarget.c, clr);
+    });
+    picker.appendChild(swatch);
   });
 
-  // Show step 1 instruction
-  // Point at the middle green bolita (1,0)
-  positionTutorialHand(grid[1][0].el);
+  // Cancel on outside tap
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'magic-brush-cancel';
+  cancelBtn.textContent = '✕';
+  cancelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    cancelMagicBrush();
+  });
+  picker.appendChild(cancelBtn);
+
+  // Position near the bolita element
+  const rect = el.getBoundingClientRect();
+  const gameRect = document.getElementById('game-container').getBoundingClientRect();
+  picker.style.position = 'fixed';
+  picker.style.left = `${Math.min(rect.left, gameRect.right - 200)}px`;
+  picker.style.top = `${Math.max(rect.top - 60, gameRect.top + 4)}px`;
+  picker.style.zIndex = '100005'; // Above tutorial overlays
+
+  document.body.appendChild(picker);
+
+  // Highlight the target bolita
+  if (grid[r][c]?.el) grid[r][c].el.classList.add('magic-brush-selected');
 }
 
-// Called from handleBolitaClick when tutorial is active
-function handleTutorialProgress() {
-  if (tutorialPhase === 'select') {
-    // Green group was just selected — advance to pop phase
-    tutorialPhase = 'pop';
-    // Hand stays in place — user needs to tap same group again to pop it
-  } else if (tutorialPhase === 'pop') {
-    // Green group was just popped — tutorial complete
-    isTutorialActive = false;
-    hideTutorialHand();
-    document.getElementById('tutorial-text').classList.add('hidden');
-    localStorage.setItem('bolitasTutorialDone', 'true');
+function closeMagicBrushPicker() {
+  const existing = document.getElementById('magic-brush-picker');
+  if (existing) existing.remove();
+  if (_magicBrushTarget) {
+    const b = grid[_magicBrushTarget.r]?.[_magicBrushTarget.c];
+    if (b?.el) b.el.classList.remove('magic-brush-selected');
+  }
+  _magicBrushTarget = null;
+}
 
-    // Restore footer text
-    document.querySelector('footer').innerHTML =
-      '<p>🔵🔴🟢 × 3+</p>';
+function cancelMagicBrush() {
+  // Deactivate powerup mode without consuming a charge
+  activePowerup = null;
+  closeMagicBrushPicker();
+  renderPowerups();
+}
 
-    // Start Level 1 after pop animation finishes
-    setTimeout(() => {
-      currentLevelIndex = 0;
-      startGame();
-    }, 700);
+function applyMagicBrush(r, c, newColor) {
+  closeMagicBrushPicker();
+
+  const bolita = grid[r][c];
+  if (!bolita) return;
+
+  // Deduct the booster charge and commit
+  useBooster('magic_brush');
+  analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
+    [analyticsManager.Params.BOOSTER_NAME]: 'magic_brush',
+    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+  });
+  boostersUsedInLevel['magic_brush'] = true;
+  activePowerup = null;
+  renderPowerups();
+
+  // Change the colour in state and DOM
+  bolita.color = newColor;
+  bolita.el.dataset.color = newColor;
+
+  if (isAudioEnabled) playSelectSound();
+  if (navigator.vibrate) navigator.vibrate(30);
+
+  // Re-check for moves after color change
+  if (!checkPossibleMoves()) {
+    const config = getCurrentLevelConfig();
+    if (score >= config.target) {
+      handleLevelComplete();
+    } else {
+      showGameOver(false);
+    }
   }
 }
+
+async function executePowerupPop(groupToPop) {
+  if (isAudioEnabled) playPopSound(groupToPop.length);
+  if (navigator.vibrate) navigator.vibrate(60);
+
+  uiGrid.classList.add('shake');
+  setTimeout(() => uiGrid.classList.remove('shake'), 350);
+
+  groupToPop.forEach(bolita => {
+    bolita.el.classList.add('popped');
+    grid[bolita.r][bolita.c] = null;
+  });
+
+  // Count as a single pop event for economy
+  const popColor = groupToPop[0]?.color || 'red';
+  trackPop(popColor, groupToPop.length);
+
+  let points = calculatePoints(groupToPop.length);
+  trackScore(points);
+  updateScore(points);
+
+  if (groupToPop.length > 0) {
+    spawnFloatingScore(points, Math.min(3, groupToPop.length), groupToPop[0].el);
+  }
+
+  await new Promise(res => setTimeout(res, 200));
+
+  applyGravity();
+  applyHorizontalShift();
+
+  setTimeout(() => {
+    groupToPop.forEach(bolita => {
+      if (bolita.el.parentNode) bolita.el.parentNode.removeChild(bolita.el);
+    });
+    isAnimating = false;
+
+    if (isBoardClear()) {
+      showCelebration();
+      setTimeout(handleLevelComplete, 1000);
+    } else if (!checkPossibleMoves()) {
+      const config = getCurrentLevelConfig();
+      if (score >= config.target) {
+        document.getElementById('pass-level-btn').classList.add('hidden');
+        handleLevelComplete();
+      } else {
+        showGameOver(false);
+      }
+    }
+  }, 400); 
+}
+
+/**
+ * Synchronizes the footer tab active state.
+ */
+function syncFooterTabs(activeTab) {
+  document.querySelectorAll('.app-footer-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.id === `footer-tab-${activeTab}`);
+  });
+}
+

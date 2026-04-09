@@ -1,7 +1,7 @@
 {
   "name": "bolitas",
   "private": true,
-  "version": "1.2.5",
+  "version": "3.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -28,7 +28,7 @@
     "@capacitor/core": "^8.1.0",
     "@capacitor/ios": "^8.1.0",
     "@capacitor/local-notifications": "^8.0.2",
-    "@dataconnect/generated": "file:src/dataconnect-generated",
+    "@capacitor/status-bar": "^8.0.1",
     "firebase": "^12.10.0"
   }
 }
