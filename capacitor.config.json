@@ -1,6 +1,6 @@
 {
   "appId": "com.dreaminraw.bolitas",
-  "appName": "Bolitas",
+  "appName": "Gloop",
   "webDir": "dist",
   "plugins": {
     "AdMob": {
@@ -8,7 +8,12 @@
     },
     "StatusBar": {
       "style": "DARK",
-      "backgroundColor": "#1a1a2e"
+      "backgroundColor": "#0f172a"
+    },
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "launchAutoHide": true,
+      "showSpinner": false
     }
   }
 }

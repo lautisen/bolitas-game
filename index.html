@@ -3,117 +3,241 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <link rel="icon" type="image/png" href="./icon.png" />
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Gloop</title>
-  <!-- Google Fonts for Modern Typography -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+  <!-- Outfit font is self-hosted (see @font-face in src/style.css) — no external requests on boot -->
 </head>
 
 <body>
+  <!-- Splash Screen -->
+  <div id="splash-screen" class="splash-container">
+    <div class="splash-content">
+      <div class="splash-logo-container">
+        <div class="splash-grid">
+          <div class="splash-ball b-blue" style="--d: 0.1s; --x: -1; --y: -1"></div>
+          <div class="splash-ball b-red" style="--d: 0.2s; --x: 0; --y: -1"></div>
+          <div class="splash-ball b-yellow" style="--d: 0.3s; --x: 1; --y: -1"></div>
+          <div class="splash-ball b-pink" style="--d: 0.2s; --x: -1; --y: 0"></div>
+          <div class="splash-ball b-yellow" style="--d: 0.3s; --x: 0; --y: 0"></div>
+          <div class="splash-ball b-blue" style="--d: 0.4s; --x: 1; --y: 0"></div>
+          <div class="splash-ball b-yellow" style="--d: 0.3s; --x: -1; --y: 1"></div>
+          <div class="splash-ball b-blue" style="--d: 0.4s; --x: 0; --y: 1"></div>
+          <div class="splash-ball b-red" style="--d: 0.5s; --x: 1; --y: 1"></div>
+        </div>
+        <h1 class="splash-title">GLOOP</h1>
+      </div>
+      <div class="splash-loader">
+        <div class="splash-loader-fill"></div>
+        <div class="splash-loader-text" data-i18n="loading">LOADING...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SVG Icon Library -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+    <symbol id="icon-home" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill="currentColor"/></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" fill="currentColor"/></symbol>
+    <symbol id="icon-ranking" viewBox="0 0 24 24"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 10.63 21 8.55 21 6V5c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z" fill="currentColor"/></symbol>
+    <symbol id="icon-shop" viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z" fill="currentColor"/></symbol>
+    <symbol id="icon-quests" viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm0 15c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" fill="currentColor"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></symbol>
+    <symbol id="icon-retry" viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></symbol>
+    <symbol id="icon-tv" viewBox="0 0 24 24"><path d="M21 6h-7.59l3.29-3.29L16 2l-4 4-4-4-1.71.71L10.59 6H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 14H3V8h18v12zM9 10v8l7-4z" fill="currentColor"/></symbol>
+  </svg>
+
   <div id="game-container">
-    <header>
+    <header class="hidden">
       <div class="header-content">
         <div class="header-left">
           <h2 id="header-mode-display">LVL 1</h2>
-          <div id="header-score-details" class="score-subtext">0 / 0</div>
+          <div id="header-score-details" class="score-subtext">
+            <div id="hud-stars">
+              <span class="hud-star" id="hud-star-1">★</span>
+              <span class="hud-star" id="hud-star-2">★</span>
+              <span class="hud-star" id="hud-star-3">★</span>
+            </div>
+            <div id="star-progress-container">
+              <span class="star-bar-icon">★</span>
+              <div class="star-bar-track">
+                <div class="star-bar-fill" id="star-bar-fill"></div>
+              </div>
+            </div>
+            <div id="hud-score-text" class="hud-score-text">0 / 0</div>
+          </div>
+          <div id="header-difficulty-tag" class="header-diff-tag hidden"></div>
         </div>
         <div class="header-right">
-          <button id="back-to-menu-btn" class="glass-btn small-btn" title="Menu">🏠</button>
-          <button id="settings-btn" class="glass-btn small-btn">⚙️</button>
-          <button id="show-leaderboard-btn" class="glass-btn small-btn hidden">�</button>
+          <div class="header-lives-pill" id="header-lives-game">
+            <span>❤️</span>
+            <span id="header-lives-count">5</span>
+          </div>
+          <div class="coin-display" id="header-coins">
+            <span class="coin-icon">🪙</span>
+            <span id="header-coin-count">0</span>
+          </div>
+          <button id="header-shop-btn" class="glass-btn small-btn" title="Shop" data-i18n="shop" data-i18n-no-text><svg class="btn-icon btn-icon-only"><use href="#icon-shop"></use></svg></button>
+          <button id="back-to-menu-btn" class="glass-btn small-btn" title="Menu" data-i18n="menu_title" data-i18n-no-text><svg class="btn-icon btn-icon-only"><use href="#icon-home"></use></svg></button>
+          <button id="settings-btn" class="glass-btn small-btn" title="Settings" data-i18n="settings_title" data-i18n-no-text><svg class="btn-icon btn-icon-only"><use href="#icon-settings"></use></svg></button>
         </div>
       </div>
-      <button id="pass-level-btn" class="glass-btn pass-level-btn hidden">✨ Next LVL ✨</button>
     </header>
 
-    <div id="tutorial-text" class="hidden"></div>
-
-    <div class="game-area">
+    <div class="game-area hidden">
+      <div id="combo-badge"></div>
+      <div id="big-pop-text"></div>
       <div id="grid">
         <svg id="selection-outline"
           style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;overflow:visible;"></svg>
       </div>
     </div>
 
-    <footer>
-      <p>🟢🟢🟢 / 🔵🔵🔵 / 🔴🔴🔴 &nbsp; 3+</p>
-    </footer>
-  </div>
-
-  <!-- UI Overlays -->
-  <!-- Auth & Main Menu Screen -->
-  <div id="login-screen" class="overlay">
-    <div class="glass-panel" id="auth-panel">
-      <h2 class="title-logo">Gloop</h2>
-      <p>👤</p>
-      <input type="text" id="username-input" class="glass-input" placeholder="✏️ Alias" autocomplete="off" />
-      <button id="login-btn" class="glass-btn primary">▶️ Play</button>
-      <p class="error-msg hidden" id="login-error">❌ Min 3+ chars</p>
-      <div class="overlay-footer-buttons">
-        <button class="glass-btn small-btn overlay-settings-btn">⚙️</button>
-        <button class="glass-btn small-btn overlay-leaderboard-btn">🏆</button>
-      </div>
+    <div id="powerups-bar" class="hidden">
+      <button id="use-shuffle-btn" class="powerup-btn" data-booster="shuffle" title="Shuffle (🔀)">
+        <div class="powerup-icon">🔀</div>
+        <div class="powerup-count">0</div>
+      </button>
+      <button id="use-bomb-btn" class="powerup-btn" data-booster="bomb" title="Bomb (💣)">
+        <div class="powerup-icon">💣</div>
+        <div class="powerup-count">0</div>
+      </button>
+      <button id="use-colorbomb-btn" class="powerup-btn" data-booster="color_bomb" title="Color Bomb (🌈)">
+        <div class="powerup-icon">🌈</div>
+        <div class="powerup-count">0</div>
+      </button>
+      <button id="use-sniper-btn" class="powerup-btn" data-booster="sniper" title="Sniper (🎯)">
+        <div class="powerup-icon">🎯</div>
+        <div class="powerup-count">0</div>
+      </button>
+      <button id="use-magicbrush-btn" class="powerup-btn" data-booster="magic_brush" title="Magic Brush (🖌️)">
+        <div class="powerup-icon">🖌️</div>
+        <div class="powerup-count">0</div>
+      </button>
     </div>
 
-    <div class="glass-panel hidden" id="main-menu-panel">
-      <h2 class="title-logo">Gloop</h2>
-      <div class="menu-buttons">
-        <button id="mode-levels-btn" class="glass-btn primary mode-btn">
-          <span>🗺️ Career</span>
-          <small>LVL <span id="current-level-display">1</span></small>
-        </button>
-        <button id="mode-zen-btn" class="glass-btn mode-btn">
-          <span>🧘 Zen</span>
-          <small>∞</small>
-        </button>
-        <button id="mode-timeattack-btn" class="glass-btn mode-btn">
-          <span>⏱️ Ranking</span>
-          <small>🏆</small>
-        </button>
+    <div id="pass-level-container" class="hidden">
+      <button id="pass-level-btn" class="glass-btn pass-level-btn" data-i18n="next_lvl">✨ Next LVL ✨</button>
+    </div>
+
+  </div>
+
+  <!-- Auth Screen (Login) -->
+  <div id="login-screen" class="overlay hidden" style="z-index: 200;">
+    <div class="glass-panel" id="auth-panel">
+      <h2 class="title-logo">GLOOP</h2>
+      <p>👤</p>
+      <input type="text" id="username-input" class="glass-input" placeholder="✏️ Alias" data-i18n="alias_placeholder" autocomplete="off" />
+      
+      <p class="choose-lang-label" data-i18n="choose_language">Choose Language</p>
+      <div class="language-selector login-lang">
+        <button class="lang-btn" data-lang="en">🇺🇸</button>
+        <button class="lang-btn" data-lang="es">🇪🇸</button>
+        <button class="lang-btn" data-lang="fr">🇫🇷</button>
+        <button class="lang-btn" data-lang="de">🇩🇪</button>
       </div>
+
+      <button id="login-btn" class="glass-btn primary" data-i18n="play">▶️ Play</button>
+      <p class="error-msg hidden" id="login-error" data-i18n="min_chars">❌ Min 3+ chars</p>
       <div class="overlay-footer-buttons">
-        <button id="logout-btn" class="text-btn">🔄 Logout</button>
-        <div class="overlay-footer-icons">
-          <button class="glass-btn small-btn overlay-settings-btn">⚙️</button>
-          <button class="glass-btn small-btn overlay-leaderboard-btn">🏆</button>
-        </div>
+        <button class="glass-btn small-btn overlay-settings-btn">⚙️</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ========== IMMERSIVE BIOME MAP (Main Menu) ========== -->
+  <div id="biome-map-screen" class="biome-map-fullscreen hidden">
+    <!-- Fixed Header -->
+    <header class="app-header">
+      <div class="app-header-left" id="app-header-profile" onclick="document.getElementById('user-settings-screen').classList.remove('hidden')">
+        <span class="header-star">👤</span>
+        <span id="app-header-level" data-i18n="player_level_display" data-i18n-params='{"val": 1}'>Level 1</span>
+      </div>
+      <div class="app-header-right">
+        <div id="active-streak-display" class="hidden">
+          <span>🔥</span>
+          <span id="active-streak-count">0</span>
+        </div>
+        <div class="header-lives-pill" id="header-lives-map" role="button" style="cursor:pointer;">
+          <span>❤️</span>
+          <span id="header-lives-count-map">5</span>
+          <span id="header-lives-timer-map" class="lives-timer-text hidden"></span>
+        </div>
+        <div class="header-coins-pill">
+          <span>🪙</span>
+          <span id="header-coin-count-map">0</span>
+        </div>
+
+        <button id="app-header-settings-btn" class="app-header-icon-btn overlay-settings-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Biome Map ScrollView -->
+    <div class="biome-map-scroll" id="biome-map-scroll">
+      <div class="biome-map-container" id="biome-map-container">
+        <!-- Populated by JS: biome blocks stacked vertically -->
+      </div>
+    </div>
+    <div id="level-select-milestone" class="win-next-milestone biome-milestone"></div>
+
+  </div>
+
+  <!-- User Settings Overlay -->
+  <div id="user-settings-screen" class="overlay hidden" style="z-index: 600;">
+    <div class="glass-panel user-settings-panel">
+      <h2 data-i18n="profile_title"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Profile</h2>
+      <div class="user-settings-name" id="user-settings-name"></div>
+      <div class="user-settings-xp">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <div class="user-settings-level" id="user-settings-level" data-i18n="player_level_display" data-i18n-params='{"val": 1}'>Level 1</div>
+          <button id="get-xp-ad-btn" class="glass-btn small-btn xp-ad-pill" title="Get Free XP">
+            <svg class="btn-icon" style="margin:0;"><use href="#icon-tv"></use></svg> <span style="margin-left:4px">+XP</span>
+          </button>
+        </div>
+        <div class="xp-bar-container"><div class="xp-bar-fill" id="user-settings-xp-bar"></div></div>
+        <div class="xp-level-label" id="user-settings-xp-label" data-i18n="xp_label" data-i18n-params='{"current": 0, "total": 500}'>0 / 500 XP</div>
+      </div>
+      <button id="user-settings-rename-btn" class="glass-btn" style="width:100%; margin-top:1rem;" data-i18n="change_name">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+        Change Name
+      </button>
+      <button id="close-user-settings-btn" class="glass-btn primary" style="width:100%; margin-top:0.5rem;" data-i18n="close">
+        <svg class="btn-icon"><use href="#icon-close"></use></svg> Close
+      </button>
     </div>
   </div>
 
   <!-- Settings Screen -->
   <div id="settings-screen" class="overlay hidden">
     <div class="glass-panel settings-panel">
-      <h2>⚙️</h2>
+      <h2 data-i18n="settings_title"><svg class="btn-icon" style="width:2rem; height:2rem; margin:0;"><use href="#icon-settings"></use></svg></h2>
       <div class="settings-options">
         <label class="setting-item">
-          <span>🔊 SFX/Music</span>
+          <span data-i18n="audio">🔊 SFX/Music</span>
           <input type="checkbox" id="audio-toggle" checked>
         </label>
         <label class="setting-item">
-          <span>👁️ Color help</span>
+          <span data-i18n="color_help">👁️ Color help</span>
           <input type="checkbox" id="colorblind-toggle">
         </label>
+        
+        <!-- Language Selector -->
+        <div class="language-selector">
+          <button class="lang-btn" data-lang="en">🇺🇸</button>
+          <button class="lang-btn" data-lang="es">🇪🇸</button>
+          <button class="lang-btn" data-lang="fr">🇫🇷</button>
+          <button class="lang-btn" data-lang="de">🇩🇪</button>
+        </div>
       </div>
-      <button id="close-settings-btn" class="glass-btn primary mt-3" style="width: 100%;">✅ Save</button>
-      <button id="exit-settings-btn" class="text-btn mt-3" style="width: 100%;">🚪 Exit</button>
-    </div>
-  </div>
-
-  <!-- Leaderboard Screen -->
-  <div id="leaderboard-screen" class="overlay hidden">
-    <div class="glass-panel leaderboard-panel">
-      <h2>🏆</h2>
-      <div class="leaderboard-list-container">
-        <ul id="leaderboard-list">
-          <li>⏳</li>
-        </ul>
-      </div>
-      <button id="close-leaderboard-btn" class="glass-btn primary">✖</button>
+      <button id="close-settings-btn" class="glass-btn primary mt-3" style="width: 100%;" data-i18n="save">
+        <svg class="btn-icon"><use href="#icon-check"></use></svg> Save
+      </button>
+      <button id="exit-settings-btn" class="text-btn mt-3" style="width: 100%;" data-i18n="close_settings">
+        <svg class="btn-icon"><use href="#icon-close"></use></svg> Close Settings
+      </button>
     </div>
   </div>
 
@@ -121,47 +245,189 @@
   <div id="clear-celebration" class="overlay hidden">
     <div id="confetti-container"></div>
     <div class="glass-panel celebration-panel">
-      <h2 class="celebration-title">🎉</h2>
+      <h2 class="celebration-title"><svg class="btn-icon" style="width:3rem; height:3rem; margin:0; color: var(--clr-yellow);"><use href="#icon-ranking"></use></svg></h2>
       <p class="celebration-subtitle">⭐⭐⭐</p>
+      <p class="celebration-message" data-i18n="board_clear_msg">You are the best!</p>
       <p>⭐ <span id="celebration-score">0</span></p>
-      <button id="celebration-continue-btn" class="glass-btn primary">▶️</button>
+      <button id="celebration-continue-btn" class="glass-btn primary" data-i18n="continue">
+        <svg class="btn-icon btn-icon-only"><use href="#icon-check"></use></svg>
+      </button>
     </div>
   </div>
 
   <!-- Reward Ready Screen -->
-  <div id="reward-ready-screen" class="overlay hidden">
-    <div class="glass-panel">
-      <h2>🎁</h2>
-      <p id="reward-ready-text"></p>
-      <button id="reward-continue-btn" class="glass-btn primary"
-        style="background: var(--clr-green); width: 100%; margin-top: 1rem;">▶️ Continue</button>
+  <div id="reward-ready-screen" class="overlay hidden" style="z-index: 30000;">
+    <div class="glass-panel reward-ready-panel">
+      <div id="reward-ready-confetti" class="reward-confetti-fx"></div>
+      <h2 class="reward-ready-icon"><svg class="btn-icon" style="width:4.5rem; height:4.5rem; margin:0; color: var(--clr-yellow);"><use href="#icon-shop"></use></svg></h2>
+      <h3 class="reward-ready-title" data-i18n="win_reward_unlocked">🎉 ¡Recompensa Obtenida!</h3>
+      <p id="reward-ready-text" class="reward-ready-subtitle"></p>
+      <button id="reward-continue-btn" class="glass-btn primary reward-continue-btn" data-i18n="continue">
+        <svg class="btn-icon"><use href="#icon-check"></use></svg> Continuar
+      </button>
+    </div>
+  </div>
+
+  <!-- Win Screen (Post-Level with XP + Coins animation) -->
+  <div id="win-screen" class="overlay hidden" style="z-index: 300;">
+    <div class="glass-panel win-panel">
+      <h2 id="win-title" data-i18n="win_great">Great!</h2>
+      <div id="win-stars" class="win-stars">
+        <span class="win-star" id="win-star-1">★</span>
+        <span class="win-star" id="win-star-2">★</span>
+        <span class="win-star" id="win-star-3">★</span>
+        <span class="win-star win-star-golden" id="win-star-4">★</span>
+      </div>
+      <div class="win-stats">
+        <div class="win-stat-row">
+          <span class="win-stat-label" data-i18n="coins">Coins</span>
+          <span class="win-stat-value coins" id="win-coins">+0</span>
+        </div>
+        <div class="win-stat-row">
+          <div style="width: 100%;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.3rem;">
+              <span class="win-stat-label" data-i18n="xp">XP</span>
+              <span class="win-stat-value xp" id="win-xp">+0</span>
+            </div>
+            <div class="xp-bar-container">
+              <div class="xp-bar-fill" id="win-xp-bar"></div>
+            </div>
+            <div class="xp-level-label" id="win-level-label" data-i18n="player_level_display" data-i18n-params='{"val": 1}'>Level 1</div>
+            <div id="win-next-milestone" class="win-next-milestone"></div>
+          </div>
+        </div>
+        <div class="win-stat-row">
+          <span class="win-stat-label" data-i18n="score">⭐ Score</span>
+          <span class="win-stat-value" id="win-score">0</span>
+        </div>
+      </div>
+      <div id="win-quests-area" class="win-quests-area hidden">
+        <div id="win-quests-list" class="win-quests-list"></div>
+      </div>
+      <div id="win-reward-notif" class="win-reward-notif hidden">
+        <span class="reward-notif-badge" id="win-reward-icon">🎁</span>
+        <span class="reward-notif-text" id="win-reward-text" data-i18n="win_reward_unlocked">Free Booster Unlocked!</span>
+      </div>
+      <button id="win-x2-btn" class="glass-btn hidden" style="background: var(--clr-orange); width:100%; margin-bottom:0.5rem;" data-i18n="x2_coins">
+        <svg class="btn-icon"><use href="#icon-tv"></use></svg> x2 Monedas
+      </button>
+      <button id="win-continue-btn" class="glass-btn primary" style="width:100%;" data-i18n="continue">
+        <svg class="btn-icon"><use href="#icon-check"></use></svg>
+      </button>
+    </div>
+  </div>
+
+
+
+  <!-- Shop Screen -->
+  <div id="shop-screen" class="overlay hidden" style="z-index: 400;">
+    <div class="glass-panel shop-panel">
+      <h2 data-i18n="shop_title"><svg class="btn-icon" style="width:1.5rem; height:1.5rem; transform: translateY(4px);"><use href="#icon-shop"></use></svg> Shop</h2>
+      <div class="shop-balance">🪙 <span id="shop-coin-count">0</span></div>
+      <div class="shop-tabs">
+        <button class="shop-tab" data-tab="calendar" data-i18n="daily_calendar_tab">📅 Calendar</button>
+        <button class="shop-tab active" data-tab="boosters" data-i18n="boosters">Boosters</button>
+        <button class="shop-tab" data-tab="coins" data-i18n="coins">Coins</button>
+      </div>
+      <div class="shop-items" id="shop-items-container">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Quests Screen -->
+  <div id="quests-screen" class="overlay hidden" style="z-index: 400;">
+    <div class="glass-panel quests-panel">
+      <h2 data-i18n="quests"><svg class="btn-icon" style="width:1.5rem; height:1.5rem; transform: translateY(4px);"><use href="#icon-quests"></use></svg> Quests</h2>
+      <div class="quest-tabs" style="margin-bottom: 0.5rem;">
+        <button class="quest-tab active" data-qtab="daily" data-i18n="daily_quests">Daily</button>
+        <button class="quest-tab" data-qtab="weekly" data-i18n="weekly_quests">Weekly</button>
+      </div>
+      <div id="quest-reset-countdown" style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 1rem; font-weight: 600; text-align: center;"></div>
+      <div class="quest-list" id="quest-list-container">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Level Prestart Screen -->
+  <div id="level-prestart-screen" class="overlay hidden" style="z-index: 25000; position: fixed; inset: 0;">
+    <div class="glass-panel" style="width: 90%; max-width: 380px;">
+      <h2 id="prestart-level-title" style="margin-bottom: 0.5rem; color: #fff;">NIVEL X</h2>
+      
+      <div style="background: rgba(0,0,0,0.4); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.1);">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.8rem; align-items: center;">
+          <span style="font-weight: 600; color: #aaa;" data-i18n="target_score">Target Score:</span>
+          <span id="prestart-target" style="font-size: 1.2rem; font-weight: 800; color: #fbc02d;">⭐ 0</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-weight: 600; color: #aaa;" data-i18n="difficulty">Difficulty:</span>
+          <span id="prestart-difficulty" style="font-weight: 800; padding: 4px 8px; border-radius: 6px; font-size: 0.9rem;">EASY</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <button id="prestart-ad-buff-btn" class="glass-btn" style="width: 100%; background: linear-gradient(135deg, #f59e0b, #ef4444); border: none; font-size: 1rem;" data-i18n="prestart_ad_buff_btn">📺 Watch Ad → Free Booster</button>
+        <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.3rem; text-align: center;" data-i18n="prestart_ad_buff_desc">Get a random booster to start this level with an advantage!</p>
+      </div>
+
+      <div style="margin-bottom: 1.5rem;">
+        <h3 style="font-size: 1rem; color: #fff; margin-bottom: 0.5rem; text-align: left;" data-i18n="daily_quests">Daily Quests</h3>
+        <div id="prestart-quests-container" style="display: flex; flex-direction: column; gap: 0.5rem; text-align: left; background: rgba(0,0,0,0.2); padding: 0.8rem; border-radius: 8px;">
+          <!-- Fetched from JS -->
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 1rem;">
+        <button id="prestart-close-btn" class="glass-btn danger" style="flex: 1;" data-i18n="close">Close</button>
+        <button id="prestart-play-btn" class="glass-btn primary" style="flex: 2; font-size: 1.2rem;" data-i18n="play">▶️ Play</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Out of Lives Screen -->
+  <div id="out-of-lives-screen" class="overlay hidden" style="z-index: 25001;">
+    <div class="glass-panel" style="text-align: center; width: 90%; max-width: 360px;">
+      <div style="font-size: 3rem; margin-bottom: 0.5rem;">💔</div>
+      <h2 id="out-of-lives-title" data-i18n="out_of_lives_title">No lives left!</h2>
+      <p id="out-of-lives-timer-text" style="color: var(--text-dim); margin-bottom: 1.5rem;"></p>
+      <button id="out-of-lives-watch-ad-btn" class="glass-btn primary"
+        style="width: 100%; margin-bottom: 0.5rem; background: var(--clr-orange);"
+        data-i18n="get_life_ad_btn">
+        <svg class="btn-icon"><use href="#icon-tv"></use></svg> Watch Ad for a Life
+      </button>
+      <button id="out-of-lives-close-btn" class="glass-btn" style="width: 100%;" data-i18n="close">Close</button>
     </div>
   </div>
 
   <!-- Game Over Screen -->
   <div id="game-over" class="overlay hidden">
     <div class="glass-panel">
-      <h2>🚫</h2>
-      <p>⭐ <span id="final-score">0</span></p>
+      <h2 id="game-over-title"></h2>
+      <div id="go-lives-wrap" class="go-lives-wrap hidden">
+        <span class="go-heart">💔</span>
+        <div class="go-lives-counter">
+          <span id="go-lives-before" class="go-lives-val">5</span>
+          <span id="go-lives-after" class="go-lives-val go-lives-val-after">4</span>
+        </div>
+      </div>
+      <p style="font-size: 1.5rem; font-weight: 800; color: #fff;">
+        ⭐ <span id="final-score">0</span> / <span id="required-score">0</span>
+      </p>
+      <p id="gameover-motivation" class="gameover-motivation"></p>
       <button id="revive-btn" class="glass-btn primary hidden"
-        style="background: var(--clr-orange); margin-bottom: 0.5rem; width: 100%;">🎥 +15s</button>
-      <button id="play-again-btn" class="glass-btn primary">🏠</button>
+        style="background: var(--clr-orange); margin-bottom: 0.5rem; width: 100%;" data-i18n="revive_ad">Revive</button>
+      <button id="pity-revive-btn" class="glass-btn primary hidden"
+        style="background: linear-gradient(135deg, #f59e0b, #ef4444); margin-bottom: 0.5rem; width: 100%; border: 2px solid #fff; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);"></button>
+      <button id="play-again-btn" class="glass-btn primary" style="width: 100%; margin-bottom: 0.5rem;" data-i18n="retry">Retry</button>
       <div class="overlay-footer-buttons">
-        <button class="glass-btn small-btn overlay-settings-btn">⚙️</button>
-        <button class="glass-btn small-btn overlay-leaderboard-btn">🏆</button>
+        <button id="game-over-menu-btn" class="glass-btn small-btn" title="Menu"><svg class="btn-icon btn-icon-only"><use href="#icon-home"></use></svg></button>
+        <button class="glass-btn small-btn overlay-settings-btn"><svg class="btn-icon btn-icon-only"><use href="#icon-settings"></use></svg></button>
       </div>
     </div>
   </div>
 
-  <!-- Mode Unlocked Screen -->
-  <div id="mode-unlocked-screen" class="overlay hidden" style="z-index: 600;">
-    <div class="glass-panel celebration-panel">
-      <h2 class="celebration-title">🔓 ✨</h2>
-      <p class="celebration-subtitle" id="unlocked-mode-name">⏱️</p>
-      <p id="unlocked-mode-desc">8×8 🏆</p>
-      <button id="unlocked-continue-btn" class="glass-btn primary">🎉</button>
-    </div>
-  </div>
+
   <div id="tutorial-screen" class="overlay hidden"
     style="background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; pointer-events: none; z-index: 150;">
     <div id="tutorial-hand">👆</div>
@@ -170,30 +436,84 @@
   <!-- Update Required Screen -->
   <div id="update-required-screen" class="overlay hidden" style="z-index: 9999; background: rgba(0,0,0,0.95);">
     <div class="glass-panel" style="text-align: center; border: 2px solid var(--clr-red);">
-      <h2 style="color: var(--clr-red);">¡Actualización Necesaria!</h2>
-      <p style="margin: 20px 0;">Hay una nueva versión de Gloop disponible. Debes actualizar para seguir jugando.</p>
-      <button id="download-update-btn" class="glass-btn primary" style="width: 100%;">Descargar Actualización</button>
+      <h2 style="color: var(--clr-red);" data-i18n="update_required">¡Actualización Necesaria!</h2>
+      <p style="margin: 20px 0;" data-i18n="update_desc">Hay una nueva versión de Gloop disponible. Debes actualizar para seguir jugando.</p>
+      <button id="download-update-btn" class="glass-btn primary" style="width: 100%;" data-i18n="download_update">Descargar Actualización</button>
+    </div>
+  </div>
+
+  <!-- Consent Required Screen (GDPR Hard Gate) -->
+  <div id="consent-required-screen" class="overlay hidden" style="z-index: 10001; background: rgba(0,0,0,0.95);">
+    <div class="glass-panel" style="text-align: center; border: 2px solid var(--clr-orange);">
+      <h2 style="color: var(--clr-orange);" data-i18n="consent_required">Consent Required</h2>
+      <p style="margin: 20px 0;" data-i18n="consent_desc">To play Gloop, we need your consent for basic cookies and ad personalization to keep the game free for everyone.</p>
+      <button id="retry-consent-btn" class="glass-btn primary" style="width: 100%; margin-bottom: 10px;" data-i18n="update_consent">Update Consent Settings</button>
+      <button id="exit-app-btn" class="text-btn" style="width: 100%;" data-i18n="exit_app">Exit Game</button>
     </div>
   </div>
 
   <!-- Ad Loading Screen -->
-  <div id="ad-loading-screen" class="overlay hidden" style="z-index: 10000; background: rgba(0,0,0,0.95);">
+  <div id="ad-loading-screen" class="overlay hidden" style="z-index: 30000; background: rgba(0,0,0,0.95);">
     <div class="glass-panel" style="max-width: 90%; padding: 2rem;">
       <div class="loader-spinner"></div>
       <div id="ad-loading-messages" style="margin-top: 20px; font-size: 1.1rem; line-height: 1.5;">
-        <p style="margin-bottom: 10px;">🇪🇸 Los anuncios nos ayudan a mejorar y mantener la aplicación ¡gracias por
-          jugar!</p>
-        <p style="margin-bottom: 10px;">🇬🇧 Ads help us improve and maintain the app thanks for playing!</p>
-        <p style="margin-bottom: 10px;">🇫🇷 Les publicités nous aident à améliorer et à maintenir l'application, merci
-          de jouer !</p>
-        <p style="margin-bottom: 10px;">🇮🇹 Gli annunci ci aiutano a migliorare e mantenere l'app grazie per aver
-          giocato!</p>
-        <p style="margin-bottom: 10px;">🇩🇪 Anzeigen helfen uns, die App zu verbessern und zu warten. Vielen Dank fürs
-          Spielen!</p>
-        <p style="margin-bottom: 0;">🇨🇳 广告帮助我们改进和维护应用程序，感谢您的参与！</p>
+        <p data-i18n="ad_support_message">Ads help us improve and maintain the app thanks for playing!</p>
       </div>
     </div>
   </div>
+
+  <!-- Exit Confirmation Overlay -->
+  <div id="exit-confirm-screen" class="overlay hidden">
+    <div class="glass-panel exit-panel">
+      <h2 class="title-logo">GLOOP</h2>
+      <p data-i18n="exit_confirm">Do you want to exit the game?</p>
+      <div class="exit-actions">
+        <button id="exit-save-close-btn" class="glass-btn primary" title="Exit Game" data-i18n="exit_game" data-i18n-no-text>
+          <svg class="btn-icon"><use href="#icon-check"></use></svg>
+          <span data-i18n="yes">Yes</span>
+        </button>
+        <button id="exit-stay-btn" class="glass-btn danger" title="Keep Playing" data-i18n="shop_stay" data-i18n-no-text>
+          <svg class="btn-icon"><use href="#icon-close"></use></svg>
+          <span data-i18n="no">No</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shop Exit Confirmation Overlay -->
+  <div id="shop-confirm-screen" class="overlay hidden" style="z-index: 9999;">
+    <div class="glass-panel exit-panel">
+      <h2 class="title-logo">🛒 Shop</h2>
+      <p data-i18n="shop_confirm">Go to the shop? This will end the current level.</p>
+      <div class="exit-actions">
+        <button id="shop-quit-level-btn" class="glass-btn success small-btn" title="Go to Shop" data-i18n="shop_go" data-i18n-no-text>
+          <svg class="btn-icon btn-icon-only"><use href="#icon-check"></use></svg>
+        </button>
+        <button id="shop-stay-level-btn" class="glass-btn danger small-btn" title="Keep Playing" data-i18n="shop_stay" data-i18n-no-text>
+          <svg class="btn-icon btn-icon-only"><use href="#icon-close"></use></svg>
+        </button>
+      </div>
+      <p><small id="shop-confirm-hint"></small></p>
+    </div>
+  </div>
+
+  <!-- Fixed Footer Navigation -->
+  <nav class="app-footer hidden">
+    <button class="app-footer-tab active" id="footer-tab-map">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+      <small data-i18n="map_tab">Map</small>
+    </button>
+    <button class="app-footer-tab" id="footer-tab-quests">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/></svg>
+      <small data-i18n="quests">Quests</small>
+    </button>
+    <button class="app-footer-tab" id="footer-tab-shop">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+      <small data-i18n="shop">Shop</small>
+    </button>
+  </nav>
+
+  <div id="ingame-toast"></div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

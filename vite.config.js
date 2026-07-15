@@ -4,13 +4,14 @@ import obfuscator from 'vite-plugin-javascript-obfuscator';
 export default defineConfig(({ mode }) => ({
     // Use './' for Capacitor/Android native builds and GitHub Pages compatibility
     base: './',
+    build: {
+        sourcemap: mode !== 'production',
+    },
     plugins: [
         mode === 'production' ? obfuscator({
             compact: true,
-            controlFlowFlattening: true,
-            controlFlowFlatteningThreshold: 0.75,
-            deadCodeInjection: true,
-            deadCodeInjectionThreshold: 0.4,
+            controlFlowFlattening: false,
+            deadCodeInjection: false,
             debugProtection: false,
             debugProtectionInterval: 0,
             disableConsoleOutput: true,
@@ -18,7 +19,7 @@ export default defineConfig(({ mode }) => ({
             log: false,
             numbersToExpressions: true,
             renameGlobals: false,
-            selfDefending: true,
+            selfDefending: false,
             splitStrings: true,
             splitStringsChunkLength: 10,
             stringArray: true,
@@ -34,7 +35,7 @@ export default defineConfig(({ mode }) => ({
             stringArrayWrappersParametersMaxCount: 4,
             stringArrayWrappersType: 'function',
             stringArrayThreshold: 0.75,
-            transformObjectKeys: true,
+            transformObjectKeys: false,
             unicodeEscapeSequence: false
         }) : []
     ]

@@ -17,9 +17,18 @@ function compareVersions(v1, v2) {
 
 export async function checkAppVersion() {
     // Only run on native devices
-    if (!Capacitor.isNativePlatform()) return false;
+    if (!Capacitor.isNativePlatform()) {
+        console.log("[VersionCheck] Not a native platform. Skipping version check.");
+        return false;
+    }
 
     try {
+        console.log("[VersionCheck] Fetching Remote Config...");
+        // Force the app to fetch the latest values from Firebase on every launch
+        await FirebaseRemoteConfig.setSettings({
+            minimumFetchIntervalInSeconds: 0
+        });
+
         // 1. Fetch Remote Config with a safety timeout (5 seconds)
         const fetchPromise = FirebaseRemoteConfig.fetchAndActivate();
         const timeoutPromise = new Promise((_, reject) =>
@@ -29,23 +38,28 @@ export async function checkAppVersion() {
         await Promise.race([fetchPromise, timeoutPromise]);
 
         // 2. Get the minimum required version from Remote Config
-        const { value } = await FirebaseRemoteConfig.getString({ key: 'minimum_version_required' });
+        const { value: requiredVersion } = await FirebaseRemoteConfig.getString({ key: 'minimum_version_required' });
+        console.log("[VersionCheck] Minimum required version (Remote):", requiredVersion || "Not set");
 
         // If not set, we assume no restriction
-        if (!value || value === '') return false;
+        if (!requiredVersion || requiredVersion === '') return false;
 
         // 3. Get the current app version
         const info = await App.getInfo();
         const currentVersion = info.version;
+        console.log("[VersionCheck] Current app version (Local):", currentVersion);
 
         // 4. Compare versions
-        if (compareVersions(currentVersion, value) < 0) {
+        if (compareVersions(currentVersion, requiredVersion) < 0) {
+            console.log(`[VersionCheck] Update REQUIRED: ${currentVersion} < ${requiredVersion}`);
             // Current version is less than required minimum version
             showUpdateScreen();
             return true; // Update is required and blocked
+        } else {
+            console.log(`[VersionCheck] App is up to date: ${currentVersion} >= ${requiredVersion}`);
         }
     } catch (error) {
-        console.error("Error checking app version:", error);
+        console.error("[VersionCheck] Error checking app version:", error);
     }
     return false; // No update required or check failed (fail open)
 }
