@@ -1,0 +1,12 @@
+Copyright (c) 2026 Lautaro Senese. All rights reserved.
+
+This repository is published for portfolio and reference purposes only.
+No permission is granted to copy, modify, distribute, or use the source
+code, artwork, or audio, in whole or in part, without prior written
+permission from the copyright holder.
+
+Third-party components keep their own licenses:
+- Outfit font (public/assets/fonts/): SIL Open Font License 1.1, see
+  public/assets/fonts/OFL.txt
+- npm dependencies and the Capacitor/Gradle project scaffolding: see their
+  respective licenses.

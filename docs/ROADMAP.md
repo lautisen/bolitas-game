@@ -61,7 +61,7 @@ Todo lo que la auditoría encontró quedó arreglado en esta versión:
 
 ## 🟡 v3.3 — Economía y retención
 
-- **Cosméticos como sumidero de monedas:** el CSS de 7 skins ya existe ([style.css](src/style.css), buscar "SKIN VARIANTS") y las claves i18n `skin_*`/`equip`/`equipped` están en los 4 idiomas; falta solo el JS de compra/equipar (aplicar clase `skin-X` a las bolitas y persistir).
+- **Cosméticos como sumidero de monedas:** el CSS de 7 skins ya existe ([style.css](../src/style.css), buscar "SKIN VARIANTS") y las claves i18n `skin_*`/`equip`/`equipped` están en los 4 idiomas; falta solo el JS de compra/equipar (aplicar clase `skin-X` a las bolitas y persistir).
 - **Rebalancear la ruleta diaria:** probabilidades uniformes 1/10 regalan 1000🪙 demasiado seguido; pasar a pesos por premio.
 - **Misiones de boosters** (ya se trackea `booster_used`) y pase semanal simple.
 - **UI de racha de días:** hoy solo hay badge + toast; mostrar la próxima recompensa.

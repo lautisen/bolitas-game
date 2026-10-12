@@ -357,7 +357,7 @@ const out = {
   "layers":layers
 };
 
-const path = './gloop_promo_animation.json';
+const path = require('path').join(__dirname, 'gloop_promo_animation.json');
 fs.writeFileSync(path, JSON.stringify(out));
 const kb = (fs.statSync(path).size/1024).toFixed(1);
 console.log(`Done — ${layers.length} layers, ${kb} KB`);

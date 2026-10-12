@@ -1,74 +1,71 @@
-# 🕹️ Bolitas - Guía de Proyecto
+# Gloop
 
-Bienvenido al repositorio de **Bolitas** (Gloop). Este documento sirve como guía rápida para desarrolladores, explicando la estructura del proyecto, las tecnologías utilizadas y dónde encontrar el código clave.
+A cross-platform mobile puzzle game built with vanilla JavaScript, Vite and Capacitor, released on Android and playable on the web.
 
-> 📖 Documentación técnica detallada: [CODEBASE.md](CODEBASE.md) · 🗺️ Cambios futuros: [ROADMAP.md](ROADMAP.md)
+Tap groups of three or more same-coloured blobs to pop them. Gravity pulls the remaining blobs down, empty columns collapse sideways, and every level asks you to hit a score target before you run out of moves. Progression is endless: levels are generated procedurally across ten themed biomes, with difficulty rising in waves and a boss level at the end of each block of fifteen.
 
-## 🚀 Información General
-Bolitas es un juego móvil multiplataforma desarrollado con tecnologías web modernas y adaptado para dispositivos móviles mediante **Capacitor**.
+![Gloop promo](promo/gloop_promo_final_16x9.png)
 
-- **Versión actual:** 3.1.4
-- **Framework base:** Vanilla JavaScript + [Vite](https://vitejs.dev/)
-- **Plataformas:** Web, Android (Capacitor), iOS (Capacitor)
+## Highlights
 
----
+- **Procedural level generation.** Board size, colour count and score target are derived from the level number. Targets are calculated from board density (cells per colour) so every level is beatable, and the generator re-rolls boards that start with too few valid moves.
+- **Game feel.** Combo multipliers, an idle hint after five seconds, a four-star rating system, synthesized sound effects (Web Audio, no sample files) and animated biome unlocks.
+- **Meta progression.** Coins, XP and player levels, five purchasable boosters (bomb, colour bomb, sniper, shuffle, magic brush), 100 daily quest templates and 20 weekly ones, a login calendar, a daily spin and an activity streak.
+- **Native mobile integration** through Capacitor 8: local notifications for retention, Android back-button handling across stacked overlays, safe-area insets injected from native code, and a native splash screen.
+- **Live operations.** Firebase Analytics for funnel events, Crashlytics for crash reporting, and Remote Config to force updates when a minimum version is required.
+- **Monetization done responsibly.** AdMob banner, interstitial and rewarded ads behind a UMP consent flow, with frequency caps and child-directed treatment enabled.
+- **Localization** in four languages (English, Spanish, French, German) with a script-verified key parity across all of them.
 
-## 📂 Estructura de Directorios
+## Tech stack
 
-| Carpeta | Descripción |
+| Area | Tools |
 | :--- | :--- |
-| `src/` | **Núcleo del proyecto.** Contiene toda la lógica del juego, estilos y módulos. |
-| `android/` | Código nativo y configuración para la plataforma Android. |
-| `ios/` | Código nativo y configuración para la plataforma iOS. |
-| `assets/` / `public/` | Imágenes, sonidos y otros recursos estáticos. |
-| `dist/` | Carpeta generada después del build de producción (optimizado y obfusquado). |
-| `resources/` | Recursos específicos de Capacitor (iconos y splash screens). |
+| Game and UI | Vanilla JavaScript (ES modules), HTML, CSS. No UI framework. |
+| Build | Vite 7, javascript-obfuscator for production builds |
+| Mobile | Capacitor 8 (Android, iOS project scaffolded) |
+| Backend services | Firebase Analytics, Crashlytics, Remote Config |
+| Ads | AdMob via `@capacitor-community/admob` |
+| CI/CD | GitHub Actions builds and deploys the web version to GitHub Pages |
 
----
+## Project structure
 
-## 🧩 Guía del Código (`src/`)
+| Path | Contents |
+| :--- | :--- |
+| `src/main.js` | Game loop, board logic (flood-fill selection, gravity, column collapse), boosters, ads and screen flow |
+| `src/biomes.js` | Procedural level generation and difficulty curve |
+| `src/economy.js` | Coins, XP and the daily and weekly quest system |
+| `src/shop.js`, `src/dailySpin.js`, `src/dailyCalendar.js` | Shop and retention features |
+| `src/audio.js` | Sound effects synthesized with the Web Audio API |
+| `src/translations.js` | i18n strings for four languages |
+| `src/analyticsManager.js`, `src/versionCheck.js` | Firebase Analytics wrapper and forced-update check |
+| `android/`, `ios/` | Native Capacitor projects |
+| `public/` | Static assets: biome art, icons, music, web manifest |
+| `docs/` | Detailed technical documentation and roadmap (in Spanish) |
 
-Aquí es donde ocurre la magia. A continuación, el detalle de los archivos principales:
+## Running locally
 
-- **`main.js`**: El corazón del juego. Contiene el bucle principal, la lógica de colisiones y la gestión de niveles.
-- **`style.css`**: Todos los estilos visuales y animaciones CSS del juego.
-- **`economy.js`**: Gestión de monedas, diamantes y transacciones dentro del juego.
-- **`shop.js`**: Lógica de la tienda, compra de cosméticos o mejoras.
-- **`biomes.js`**: Definición de los diferentes biomas o mundos con sus propiedades visuales y mecánicas.
-- **`translations.js`**: Sistema multi-idioma.
-- **`audio.js`**: Motor de sonido y música de fondo.
-- **`tutorial.js`**: Secuencia de aprendizaje para nuevos jugadores.
-- **`dailySpin.js` / `dailyCalendar.js`**: Sistemas de retención (premios diarios y ruleta).
-- **`analyticsManager.js`**: Integración con Firebase Analytics para seguimiento de eventos.
-- **`livesManager.js`**: Control de las vidas del jugador y tiempos de espera.
+Requires Node.js 20 or newer.
 
----
+```bash
+npm install
+npm run dev      # start the Vite dev server
+npm run build    # production build in dist/
+npx cap sync     # copy the web build into the native projects
+```
 
-## 🛠️ Tecnologías Principales
+Open `android/` in Android Studio to build the Android app.
 
-- **Capacitor:** Para acceder a APIs nativas (Notificaciones, AdMob, Splash Screen).
-- **Firebase:** Utilizado para Analytics, Crashlytics y Remote Config.
-- **AdMob:** Integración de anuncios para monetización.
-- **JS Obfuscator:** Protege el código fuente en las versiones de producción.
+## Documentation
 
----
+- [docs/CODEBASE.md](docs/CODEBASE.md) is a full technical walkthrough of every module, the data model and the main flows.
+- [docs/ROADMAP.md](docs/ROADMAP.md) lists audit findings, fixes and planned work.
 
-## 🏃 Scripts Disponibles
+Both are written in Spanish.
 
-Para trabajar en el proyecto, usa los siguientes comandos:
+## Note on public identifiers
 
-- `npm install`: Instala las dependencias necesarias.
-- `npm run dev`: Inicia el servidor de desarrollo local (Vite).
-- `npm run build`: Genera la versión de producción optimizada en `/dist`.
-- `npx cap sync`: Sincroniza los cambios web con las carpetas nativas (`android`/`ios`).
+The Firebase configuration (`android/app/google-services.json`) and the AdMob app and ad unit IDs in the source are client-side identifiers that ship inside every copy of the app. They are not secrets; access to the Firebase project is controlled by security rules (Firestore is fully locked down) and API key restrictions.
 
----
+## License
 
-## 📝 Notas para Desarrolladores
-
-1.  **Firebase:** Los archivos de configuración de Firebase (`google-services.json` para Android y `GoogleService-Info.plist` para iOS) deben estar correctamente ubicados en sus respectivas carpetas nativas para que las analíticas funcionen.
-2.  **Producción:** Siempre utiliza `npm run build` antes de realizar un `npx cap copy` o `npx cap sync` para asegurar que el código en el dispositivo sea el más reciente y esté optimizado.
-3.  **Localización:** Si decides añadir un nuevo idioma, asegúrate de actualizar `translations.js`.
-
----
-*Este proyecto es de uso privado y local.*
+All rights reserved; the source is published for portfolio purposes. See [LICENSE](LICENSE). The bundled Outfit font is licensed under the [SIL Open Font License](public/assets/fonts/OFL.txt).
