@@ -26,7 +26,7 @@ Tap groups of three or more same-coloured blobs to pop them. Gravity pulls the r
 | Area | Tools |
 | :--- | :--- |
 | Game and UI | Vanilla JavaScript (ES modules), HTML, CSS. No UI framework. |
-| Build | Vite 7, javascript-obfuscator for production builds |
+| Build | Vite 7, javascript-obfuscator for production builds (added as an experiment to learn how obfuscation affects bundle size and runtime behaviour; the readable source is all in this repo) |
 | Testing | Vitest with jsdom |
 | Mobile | Capacitor 8 (Android, iOS project scaffolded) |
 | Backend services | Firebase Analytics, Crashlytics, Remote Config |
