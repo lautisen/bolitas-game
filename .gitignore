@@ -24,3 +24,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Secrets and signing material (never commit)
+.env
+.env.*
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+*.mobileprovision
+keystore.properties
+key.properties
+**/service-account*.json
+*-firebase-adminsdk-*.json
+admob-keys*.txt
