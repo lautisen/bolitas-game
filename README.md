@@ -27,22 +27,24 @@ Tap groups of three or more same-coloured blobs to pop them. Gravity pulls the r
 | :--- | :--- |
 | Game and UI | Vanilla JavaScript (ES modules), HTML, CSS. No UI framework. |
 | Build | Vite 7, javascript-obfuscator for production builds (added as an experiment to learn how obfuscation affects bundle size and runtime behaviour; the readable source is all in this repo) |
-| Testing | Vitest with jsdom |
+| Testing and quality | Vitest with jsdom, ESLint, Prettier |
 | Mobile | Capacitor 8 (Android, iOS project scaffolded) |
 | Backend services | Firebase Analytics, Crashlytics, Remote Config |
 | Ads | AdMob via `@capacitor-community/admob` |
-| CI/CD | GitHub Actions runs the tests on every push and pull request, then builds and deploys the web version to GitHub Pages |
+| CI/CD | GitHub Actions runs lint, a formatting check and the tests on every push and pull request, then builds and deploys the web version to GitHub Pages |
 
 ## Project structure
 
 | Path | Contents |
 | :--- | :--- |
-| `src/main.js` | Game loop, rendering, boosters, ads and screen flow |
+| `src/main.js` | Game loop, rendering, boosters and screen flow |
 | `src/board.js` | Pure board logic: flood-fill groups, gravity, column collapse, move detection, spawn colours |
 | `src/scoring.js` | Points per pop, combo multipliers and star thresholds |
 | `src/biomes.js` | Procedural level generation and difficulty curve |
 | `src/economy.js` | Coins, XP and the daily and weekly quest system |
-| `src/shop.js`, `src/dailySpin.js`, `src/dailyCalendar.js` | Shop and retention features |
+| `src/ads.js` | AdMob: UMP consent, banner, interstitial frequency policy and rewarded ads |
+| `src/shop.js`, `src/dailySpin.js`, `src/dailyCalendar.js`, `src/streak.js` | Shop and retention features |
+| `src/notifications.js` | Local notifications for inactivity, quest resets and full lives |
 | `src/audio.js` | Sound effects synthesized with the Web Audio API |
 | `src/translations.js` | i18n strings for four languages |
 | `src/analyticsManager.js`, `src/versionCheck.js` | Firebase Analytics wrapper and forced-update check |
@@ -58,6 +60,8 @@ Requires Node.js 20 or newer.
 npm install
 npm run dev      # start the Vite dev server
 npm test         # run the test suite
+npm run lint     # ESLint
+npm run format   # Prettier
 npm run build    # production build in dist/
 npx cap sync     # copy the web build into the native projects
 ```
@@ -66,10 +70,13 @@ Open `android/` in Android Studio to build the Android app.
 
 ## Tests
 
-The suite in `tests/` covers the parts of the game that are pure logic:
+The suite in `tests/` (78 tests) covers the game logic and the native integrations:
 
+- **Board rules** (`board.test.js`): flood-fill group detection, gravity, column collapse, move detection and spawn colours.
+- **Scoring** (`scoring.test.js`): points per pop, combo multipliers and star thresholds.
 - **Level generation** (`biomes.test.js`): every generated level across 100 biome blocks has a valid grid size, colour count and a score target rounded to 50; the first biome stays gentle; every later biome ends with a boss level; booster tutorial levels are forced easy.
-- **Lives** (`livesManager.test.js`): consumption, timed regeneration with fake timers, the maximum cap and persistence across reloads.
+- **Lives and streak** (`livesManager.test.js`, `streak.test.js`): timed regeneration with fake timers, caps, persistence, consecutive-day rules including local-midnight rollover, and milestone rewards.
+- **Ads and notifications** (`ads.test.js`, `notifications.test.js`): with the Capacitor plugins mocked, the interstitial frequency policy, consent gating, reward dispatch, double-tap protection, and notification scheduling and permission handling.
 - **Localization** (`translations.test.js`): all four languages have the same keys and the same `{{placeholders}}` as English, with no empty strings.
 
 ## Documentation
