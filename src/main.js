@@ -3,6 +3,11 @@ import analyticsManager from './analyticsManager.js';
 import { getLevelData, getBlockForLevel, generateBiomeBlock, getVisibleBiomeRange, isBiomeRevealed } from './biomes.js';
 import { playSelectSound, playPopSound, playErrorSound, playGameOverSound, playWinSound, playCoinSound, playLevelUnlockSound } from './audio.js';
 import { checkAppVersion } from './versionCheck.js';
+import {
+  MIN_GROUP, getGroup, pickSpawnColor, findValidGroups, findValidGroup, hasValidMove,
+  isBoardClear, applyGravity, collapseEmptyColumns,
+} from './board.js';
+import { COMBO_MULTIPLIERS, COMBO_WINDOW_MS, calculatePoints, nextComboLevel, getStarCount, getStarProgress } from './scoring.js';
 import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
@@ -41,7 +46,6 @@ bgmAudio.volume = 0.4;
 const COLS = 10;
 const ROWS = 12;
 let prestartAdsThisTry = 0;
-const MIN_GROUP = 3;
 // Colors ordered by visual distinctiveness — levels using fewer colors get the first N entries
 const COLORS = ['red', 'blue', 'yellow', 'green', 'pink', 'cyan'];
 // AdMob Banner ID
@@ -86,7 +90,6 @@ let comboMultiplier = 1;
 let comboLevel = 0; // 0=none, 1=x1.5, 2=x2, 3=x2.5, 4=x3
 let lastPopTime = 0;
 let comboTimeout = null;
-const COMBO_MULTIPLIERS = [1, 1.5, 2, 2.5, 3];
 let shownQuestToasts = new Set();
 
 let isAudioEnabled = localStorage.getItem('bolitasAudioEnabled') !== 'false';
@@ -1130,8 +1133,7 @@ async function shuffleBoard() {
   }
 
   // Apply gravity/shift just in case of holes
-  applyGravity();
-  applyHorizontalShift();
+  settleBoard();
 
   // Wait for in animation (CSS is 0.5s)
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -1140,7 +1142,7 @@ async function shuffleBoard() {
   newBolitas.forEach(el => el.classList.remove('shuffling-in'));
   isAnimating = false;
 
-  if (!checkPossibleMoves()) {
+  if (!hasValidMove(grid)) {
     // If still stuck, shuffle again (recursive but safe due to await)
     await shuffleBoard();
   }
@@ -1463,23 +1465,14 @@ function initGame(isRevive = false, rerollAttempt = 0) {
 
   for (let r = 0; r < currentRows; r++) {
     for (let c = 0; c < currentCols; c++) {
-      // Restore limit: max adjacent balls sequence to 5
-      let allowedColors = [];
-      for (let i = 0; i < currentColors; i++) {
-        if (getPredictedClusterSize(r, c, currentColorSet[i]) <= 5) {
-          allowedColors.push(currentColorSet[i]);
-        }
-      }
-      if (allowedColors.length === 0) allowedColors = currentColorSet.slice(0, currentColors);
-
-      const color = allowedColors[Math.floor(Math.random() * allowedColors.length)];
+      const color = pickSpawnColor(grid, r, c, currentColorSet.slice(0, currentColors));
       createBolita(r, c, color);
     }
   }
 
   // Ensure at least 3 valid groups are available at start (capped so a pathological
   // config can never recurse forever — after 20 tries we accept the board as-is)
-  if (countValidGroups() < 3 && rerollAttempt < 20) {
+  if (findValidGroups(grid, 3).length < 3 && rerollAttempt < 20) {
     initGame(isRevive, rerollAttempt + 1);
   } else {
     resetHintTimer();
@@ -1621,16 +1614,12 @@ async function handleBolitaClick(startR, startC, el) {
 
     // Combo tracking
     clearTimeout(comboTimeout);
-    if (lastPopTime > 0 && currentTime - lastPopTime < 2500) {
-      comboLevel = Math.min(comboLevel + 1, 4);
-    } else {
-      comboLevel = 0;
-    }
+    comboLevel = nextComboLevel(comboLevel, lastPopTime > 0 ? currentTime - lastPopTime : null);
     comboMultiplier = COMBO_MULTIPLIERS[comboLevel];
     lastPopTime = currentTime;
     if (comboLevel > 0) {
       showComboBadge(comboMultiplier);
-      comboTimeout = setTimeout(breakCombo, 2500);
+      comboTimeout = setTimeout(breakCombo, COMBO_WINDOW_MS);
     } else {
       hideComboBadge();
     }
@@ -1673,8 +1662,7 @@ async function handleBolitaClick(startR, startC, el) {
     // Wait for popping animation to start before moving others
     await new Promise(res => setTimeout(res, 200));
 
-    applyGravity();
-    applyHorizontalShift();
+    settleBoard();
 
     // Clean up DOM elements
     setTimeout(() => {
@@ -1690,13 +1678,13 @@ async function handleBolitaClick(startR, startC, el) {
       }
 
       // Check if the board is completely clear
-      if (isBoardClear()) {
+      if (isBoardClear(grid)) {
         showCelebration();
         setTimeout(handleLevelComplete, 1500);
         return;
       }
 
-      if (!checkPossibleMoves()) {
+      if (!hasValidMove(grid)) {
         const config = getCurrentLevelConfig();
         if (score >= config.target) {
           document.getElementById('pass-level-btn').classList.add('hidden');
@@ -1718,27 +1706,7 @@ async function handleBolitaClick(startR, startC, el) {
     selectedGroup = [];
     clearSelectionOutline();
 
-    const targetColor = grid[r][c].color;
-    const group = [];
-    const visited = new Set();
-
-    function dfs(currR, currC) {
-      if (currR < 0 || currR >= currentRows || currC < 0 || currC >= currentCols) return;
-      const key = `${currR},${currC}`;
-      if (visited.has(key)) return;
-
-      if (!grid[currR][currC] || grid[currR][currC].color !== targetColor) return;
-
-      visited.add(key);
-      group.push(grid[currR][currC]);
-
-      dfs(currR + 1, currC);
-      dfs(currR - 1, currC);
-      dfs(currR, currC + 1);
-      dfs(currR, currC - 1);
-    }
-
-    dfs(r, c);
+    const group = getGroup(grid, r, c);
 
     if (group.length >= MIN_GROUP) {
       if (isAudioEnabled) playSelectSound();
@@ -1903,101 +1871,26 @@ function findBolitaByElement(el) {
   return null;
 }
 
-function getPredictedClusterSize(r, c, targetColor) {
-  const temp = grid[r][c];
-  grid[r][c] = { color: targetColor };
-  const size = getClusterSize(r, c, targetColor);
-  grid[r][c] = temp;
-  return size;
-}
 
-function getClusterSize(startR, startC, targetColor) {
-  let count = 0;
-  const visited = new Set();
-  const dfs = (currR, currC) => {
-    if (currR < 0 || currR >= currentRows || currC < 0 || currC >= currentCols) return;
-    const key = `${currR},${currC}`;
-    if (visited.has(key)) return;
-    if (!grid[currR][currC] || grid[currR][currC].color !== targetColor) return;
-    visited.add(key);
-    count++;
-    dfs(currR + 1, currC);
-    dfs(currR - 1, currC);
-    dfs(currR, currC + 1);
-    dfs(currR, currC - 1);
-  };
-  dfs(startR, startC);
-  return count;
-}
 
-function applyGravity() {
-  for (let c = 0; c < currentCols; c++) {
-    let emptyRow = currentRows - 1;
-    // Scan from bottom to top
-    for (let r = currentRows - 1; r >= 0; r--) {
-      const item = grid[r][c];
-      if (item !== null) {
-        if (r !== emptyRow) {
-          // Move item down to emptyRow
-          grid[emptyRow][c] = item;
-          grid[r][c] = null;
-          item.r = emptyRow;
-          item.c = c;
-          item.el.dataset.row = emptyRow; // Sync for tutorials
-          item.el.style.setProperty('--row', emptyRow);
-        }
-        emptyRow--;
-      }
-    }
+// Apply gravity and column collapse, then move the pieces' elements to match
+function settleBoard() {
+  for (const { item, r, c } of [...applyGravity(grid), ...collapseEmptyColumns(grid)]) {
+    item.r = r;
+    item.c = c;
+    item.el.dataset.row = r; // Sync for tutorials
+    item.el.dataset.col = c;
+    item.el.style.setProperty('--row', r);
+    item.el.style.setProperty('--col', c);
   }
 }
 
-function applyHorizontalShift() {
-  let emptyCols = 0;
-
-  for (let c = 0; c < currentCols; c++) {
-    // Check if entire column is empty
-    let isColEmpty = true;
-    for (let r = 0; r < currentRows; r++) {
-      if (grid[r][c] !== null) {
-        isColEmpty = false;
-        break;
-      }
-    }
-
-    if (isColEmpty) {
-      emptyCols++;
-    } else if (emptyCols > 0) {
-      // Shift column to the left by emptyCols
-      const newC = c - emptyCols;
-      for (let r = 0; r < currentRows; r++) {
-        const item = grid[r][c];
-        if (item !== null) {
-          grid[r][newC] = item;
-          grid[r][c] = null;
-          item.c = newC;
-          item.el.dataset.col = newC; // Sync for tutorials
-          item.el.style.setProperty('--col', newC);
-        }
-      }
-    }
-  }
-}
 
 function refillBoard() {
   for (let c = 0; c < currentCols; c++) {
     for (let r = 0; r < currentRows; r++) {
       if (grid[r][c] === null) {
-        // Restore limit: max adjacent balls sequence to 5
-        let allowedColors = [];
-        for (let i = 0; i < currentColors; i++) {
-          if (getPredictedClusterSize(r, c, currentColorSet[i]) <= 5) {
-            allowedColors.push(currentColorSet[i]);
-          }
-        }
-        if (allowedColors.length === 0) allowedColors = currentColorSet.slice(0, currentColors);
-
-        const color = allowedColors[Math.floor(Math.random() * allowedColors.length)];
+        const color = pickSpawnColor(grid, r, c, currentColorSet.slice(0, currentColors));
         createBolita(r, c, color);
 
         // Little trick to animate falling from top
@@ -2059,27 +1952,8 @@ function clearSelectionOutline() {
 // -------------------------------------------------------
 
 
-function calculatePoints(count) {
-  if (count <= 3) return 100;
-  if (count === 4) return 300;
-  if (count === 5) return 800;
-  if (count === 6) return 1500;
-  return 3000;
-}
 
-function getStarCount(currentScore, target) {
-  if (currentScore >= target * 1.25) return 3;
-  if (currentScore >= target * 1.10) return 2;
-  if (currentScore >= target) return 1;
-  return 0;
-}
 
-function getStarProgress(currentScore, target) {
-  if (currentScore >= target * 1.25) return 1;
-  if (currentScore >= target * 1.10) return (currentScore - target * 1.10) / (target * 0.15);
-  if (currentScore >= target) return (currentScore - target) / (target * 0.10);
-  return Math.min(currentScore / target, 1);
-}
 
 let _lastStarCount = 0;
 
@@ -2123,110 +1997,8 @@ function updateScore(points) {
 
 // updateModeButtons removed — only Career mode exists now
 
-function checkPossibleMoves() {
-  return findValidGroup() !== null;
-}
 
-// Returns the first valid group found, or null if none
-// Count how many valid groups exist on the board
-function countValidGroups() {
-  const visited = new Set();
-  let count = 0;
 
-  for (let r = 0; r < currentRows; r++) {
-    for (let c = 0; c < currentCols; c++) {
-      if (!grid[r][c]) continue;
-
-      const key = `${r},${c}`;
-      if (visited.has(key)) continue;
-
-      const targetColor = grid[r][c].color;
-      const groupSize = [];
-      const queue = [{ r, c }];
-      let qIdx = 0;
-      const localVisited = new Set();
-      localVisited.add(key);
-
-      while (qIdx < queue.length) {
-        const curr = queue[qIdx++];
-        groupSize.push(curr);
-        visited.add(`${curr.r},${curr.c}`);
-
-        const neighbors = [
-          { r: curr.r + 1, c: curr.c },
-          { r: curr.r - 1, c: curr.c },
-          { r: curr.r, c: curr.c + 1 },
-          { r: curr.r, c: curr.c - 1 }
-        ];
-
-        for (const n of neighbors) {
-          if (n.r >= 0 && n.r < currentRows && n.c >= 0 && n.c < currentCols && grid[n.r][n.c] && grid[n.r][n.c].color === targetColor) {
-            const nKey = `${n.r},${n.c}`;
-            if (!localVisited.has(nKey)) {
-              localVisited.add(nKey);
-              queue.push(n);
-            }
-          }
-        }
-      }
-
-      if (groupSize.length >= MIN_GROUP) {
-        count++;
-        if (count >= 3) return count; // Early exit once we have enough
-      }
-    }
-  }
-  return count;
-}
-
-function findValidGroup() {
-  const visited = new Set();
-
-  for (let r = 0; r < currentRows; r++) {
-    for (let c = 0; c < currentCols; c++) {
-      if (!grid[r][c]) continue;
-
-      const key = `${r},${c}`;
-      if (visited.has(key)) continue;
-
-      const targetColor = grid[r][c].color;
-      const group = [];
-
-      const queue = [{ r, c }];
-      const localVisited = new Set();
-      localVisited.add(key);
-
-      while (queue.length > 0) {
-        const curr = queue.shift();
-        group.push(curr);
-        visited.add(`${curr.r},${curr.c}`);
-
-        const neighbors = [
-          { r: curr.r + 1, c: curr.c },
-          { r: curr.r - 1, c: curr.c },
-          { r: curr.r, c: curr.c + 1 },
-          { r: curr.r, c: curr.c - 1 }
-        ];
-
-        for (const n of neighbors) {
-          if (n.r >= 0 && n.r < currentRows && n.c >= 0 && n.c < currentCols) {
-            const nKey = `${n.r},${n.c}`;
-            if (!localVisited.has(nKey) && grid[n.r][n.c] && grid[n.r][n.c].color === targetColor) {
-              localVisited.add(nKey);
-              queue.push(n);
-            }
-          }
-        }
-      }
-
-      if (group.length >= MIN_GROUP) {
-        return group;
-      }
-    }
-  }
-
-  return null;
-}
 
 // Hint system: highlight a valid group after inactivity
 function resetHintTimer() {
@@ -2244,7 +2016,7 @@ function clearHint() {
 
 function showHint() {
   if (isTutorialActive()) return;
-  const group = findValidGroup();
+  const group = findValidGroup(grid);
   if (!group) return;
 
   group.forEach(({ r, c }) => {
@@ -2269,7 +2041,7 @@ async function showGameOver(isWin = false) {
 
   document.querySelector('.app-footer')?.classList.add('hidden');
   // Clear-board win condition: if board is empty, it's ALWAYS a win
-  if (!isWin && isBoardClear()) {
+  if (!isWin && isBoardClear(grid)) {
      handleLevelComplete();
      return;
   }
@@ -2626,14 +2398,6 @@ function handleLevelComplete() {
 }
 
 
-function isBoardClear() {
-  for (let r = 0; r < currentRows; r++) {
-    for (let c = 0; c < currentCols; c++) {
-      if (grid[r] && grid[r][c]) return false;
-    }
-  }
-  return true;
-}
 
 function showCelebration() {
   clearInterval(timerInterval);
@@ -3677,7 +3441,7 @@ function applyMagicBrush(r, c, newColor) {
   if (navigator.vibrate) navigator.vibrate(30);
 
   // Re-check for moves after color change
-  if (!checkPossibleMoves()) {
+  if (!hasValidMove(grid)) {
     const config = getCurrentLevelConfig();
     if (score >= config.target) {
       handleLevelComplete();
@@ -3718,8 +3482,7 @@ async function executePowerupPop(groupToPop) {
 
   await new Promise(res => setTimeout(res, 200));
 
-  applyGravity();
-  applyHorizontalShift();
+  settleBoard();
 
   setTimeout(() => {
     groupToPop.forEach(bolita => {
@@ -3727,10 +3490,10 @@ async function executePowerupPop(groupToPop) {
     });
     isAnimating = false;
 
-    if (isBoardClear()) {
+    if (isBoardClear(grid)) {
       showCelebration();
       setTimeout(handleLevelComplete, 1000);
-    } else if (!checkPossibleMoves()) {
+    } else if (!hasValidMove(grid)) {
       const config = getCurrentLevelConfig();
       if (score >= config.target) {
         document.getElementById('pass-level-btn').classList.add('hidden');
