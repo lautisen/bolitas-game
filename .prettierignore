@@ -1,0 +1,16 @@
+dist
+android
+ios
+node_modules
+promo
+resources
+package-lock.json
+*.md
+index.html
+src/style.css
+.vite
+.firebase
+public
+.claude
+.github
+*.json

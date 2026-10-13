@@ -17,17 +17,18 @@ const SVG_STRINGS = {
   shuffle: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#FFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>`,
   bomb: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#374151" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="13" r="9"></circle><path d="M14.5 9.5L16 8"></path><path d="M18 5h-1a1 1 0 0 0-1 1v1"></path><path d="M19 4l1-1"></path></svg>`,
   colorbomb: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path><path d="M9 15c-1.5 2.5-4 5.5-7 5.5 2.5-3 3-6.5 2.5-10"></path></svg>`,
-  trio: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#10B981" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>`
+  trio: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#10B981" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>`,
 };
 
 const ICONS = {};
-Object.keys(SVG_STRINGS).forEach(key => {
+Object.keys(SVG_STRINGS).forEach((key) => {
   const img = new Image();
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(SVG_STRINGS[key]);
   ICONS[key] = img;
 });
 
-const getSvgHtml = (type) => `<img src="${ICONS[type].src}" style="width:1.2em;height:1.2em;vertical-align:middle;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.5));" />`;
+const getSvgHtml = (type) =>
+  `<img src="${ICONS[type].src}" style="width:1.2em;height:1.2em;vertical-align:middle;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.5));" />`;
 
 // ======================== PRIZE CONFIG ========================
 
@@ -43,9 +44,11 @@ export const SPIN_PRIZES = [
   {
     id: 'coins_500a',
     imgKey: 'coin',
-    get icon() { return getSvgHtml('coin'); },
+    get icon() {
+      return getSvgHtml('coin');
+    },
     bg: '#EC4899', // Pink
-    label: (isGolden) => isGolden ? 'x1000' : 'x500',
+    label: (isGolden) => (isGolden ? 'x1000' : 'x500'),
     labelFull: (isGolden) => t('daily_spin_prize_coins', { val: isGolden ? 1000 : 500 }),
     apply: () => addCoins(500),
     applyDouble: () => addCoins(1000),
@@ -54,9 +57,11 @@ export const SPIN_PRIZES = [
   {
     id: 'coins_100a',
     imgKey: 'coin',
-    get icon() { return getSvgHtml('coin'); },
+    get icon() {
+      return getSvgHtml('coin');
+    },
     bg: '#3B82F6', // Blue
-    label: (isGolden) => isGolden ? 'x200' : 'x100',
+    label: (isGolden) => (isGolden ? 'x200' : 'x100'),
     labelFull: (isGolden) => t('daily_spin_prize_coins', { val: isGolden ? 200 : 100 }),
     apply: () => addCoins(100),
     applyDouble: () => addCoins(200),
@@ -65,10 +70,14 @@ export const SPIN_PRIZES = [
   {
     id: 'booster_shuffle',
     imgKey: 'shuffle',
-    get icon() { return getSvgHtml('shuffle'); },
+    get icon() {
+      return getSvgHtml('shuffle');
+    },
     bg: '#8B5CF6', // Purple
-    label: (isGolden) => isGolden ? t('daily_spin_label_booster_double') : t('daily_spin_label_booster'),
-    labelFull: (isGolden) => isGolden ? '2x ' + t('booster_shuffle_name') : t('booster_shuffle_name'),
+    label: (isGolden) =>
+      isGolden ? t('daily_spin_label_booster_double') : t('daily_spin_label_booster'),
+    labelFull: (isGolden) =>
+      isGolden ? '2x ' + t('booster_shuffle_name') : t('booster_shuffle_name'),
     apply: () => addBoosterFree('shuffle', 1),
     applyDouble: () => addBoosterFree('shuffle', 2),
   },
@@ -76,9 +85,11 @@ export const SPIN_PRIZES = [
   {
     id: 'coins_500b',
     imgKey: 'coin',
-    get icon() { return getSvgHtml('coin'); },
+    get icon() {
+      return getSvgHtml('coin');
+    },
     bg: '#EC4899', // Pink
-    label: (isGolden) => isGolden ? 'x1000' : 'x500',
+    label: (isGolden) => (isGolden ? 'x1000' : 'x500'),
     labelFull: (isGolden) => t('daily_spin_prize_coins', { val: isGolden ? 1000 : 500 }),
     apply: () => addCoins(500),
     applyDouble: () => addCoins(1000),
@@ -87,9 +98,11 @@ export const SPIN_PRIZES = [
   {
     id: 'coins_1000',
     imgKey: 'coin',
-    get icon() { return getSvgHtml('coin'); },
+    get icon() {
+      return getSvgHtml('coin');
+    },
     bg: '#10B981', // Emerald Green (Jackpot coins)
-    label: (isGolden) => isGolden ? 'x2000' : 'x1000',
+    label: (isGolden) => (isGolden ? 'x2000' : 'x1000'),
     labelFull: (isGolden) => t('daily_spin_prize_coins', { val: isGolden ? 2000 : 1000 }),
     apply: () => addCoins(1000),
     applyDouble: () => addCoins(2000),
@@ -98,10 +111,13 @@ export const SPIN_PRIZES = [
   {
     id: 'booster_bomb',
     imgKey: 'bomb',
-    get icon() { return getSvgHtml('bomb'); },
+    get icon() {
+      return getSvgHtml('bomb');
+    },
     bg: '#EF4444', // Red
-    label: (isGolden) => isGolden ? t('daily_spin_label_booster_double') : t('daily_spin_label_booster'),
-    labelFull: (isGolden) => isGolden ? '2x ' + t('booster_bomb_name') : t('booster_bomb_name'),
+    label: (isGolden) =>
+      isGolden ? t('daily_spin_label_booster_double') : t('daily_spin_label_booster'),
+    labelFull: (isGolden) => (isGolden ? '2x ' + t('booster_bomb_name') : t('booster_bomb_name')),
     apply: () => addBoosterFree('bomb', 1),
     applyDouble: () => addBoosterFree('bomb', 2),
   },
@@ -109,9 +125,11 @@ export const SPIN_PRIZES = [
   {
     id: 'coins_100b',
     imgKey: 'coin',
-    get icon() { return getSvgHtml('coin'); },
+    get icon() {
+      return getSvgHtml('coin');
+    },
     bg: '#3B82F6', // Blue
-    label: (isGolden) => isGolden ? 'x200' : 'x100',
+    label: (isGolden) => (isGolden ? 'x200' : 'x100'),
     labelFull: (isGolden) => t('daily_spin_prize_coins', { val: isGolden ? 200 : 100 }),
     apply: () => addCoins(100),
     applyDouble: () => addCoins(200),
@@ -120,10 +138,14 @@ export const SPIN_PRIZES = [
   {
     id: 'booster_colorbomb',
     imgKey: 'colorbomb',
-    get icon() { return getSvgHtml('colorbomb'); },
+    get icon() {
+      return getSvgHtml('colorbomb');
+    },
     bg: '#F59E0B', // Amber
-    label: (isGolden) => isGolden ? t('daily_spin_label_booster_double') : t('daily_spin_label_booster'),
-    labelFull: (isGolden) => isGolden ? '2x ' + t('booster_color_bomb_name') : t('booster_color_bomb_name'),
+    label: (isGolden) =>
+      isGolden ? t('daily_spin_label_booster_double') : t('daily_spin_label_booster'),
+    labelFull: (isGolden) =>
+      isGolden ? '2x ' + t('booster_color_bomb_name') : t('booster_color_bomb_name'),
     apply: () => addBoosterFree('color_bomb', 1),
     applyDouble: () => addBoosterFree('color_bomb', 2),
   },
@@ -131,9 +153,11 @@ export const SPIN_PRIZES = [
   {
     id: 'coins_500c',
     imgKey: 'coin',
-    get icon() { return getSvgHtml('coin'); },
+    get icon() {
+      return getSvgHtml('coin');
+    },
     bg: '#EC4899', // Pink
-    label: (isGolden) => isGolden ? 'x1000' : 'x500',
+    label: (isGolden) => (isGolden ? 'x1000' : 'x500'),
     labelFull: (isGolden) => t('daily_spin_prize_coins', { val: isGolden ? 1000 : 500 }),
     apply: () => addCoins(500),
     applyDouble: () => addCoins(1000),
@@ -142,12 +166,24 @@ export const SPIN_PRIZES = [
   {
     id: 'booster_trio',
     imgKey: 'trio',
-    get icon() { return getSvgHtml('trio'); },
+    get icon() {
+      return getSvgHtml('trio');
+    },
     bg: '#0F766E', // Teal/Dark Green
-    label: (isGolden) => isGolden ? t('daily_spin_label_prize_double') : t('daily_spin_label_prize'),
-    labelFull: (isGolden) => isGolden ? '2x ' + t('daily_spin_prize_booster_trio') : t('daily_spin_prize_booster_trio'),
-    apply: () => { addBoosterFree('shuffle', 1); addBoosterFree('bomb', 1); addBoosterFree('color_bomb', 1); },
-    applyDouble: () => { addBoosterFree('shuffle', 2); addBoosterFree('bomb', 2); addBoosterFree('color_bomb', 2); },
+    label: (isGolden) =>
+      isGolden ? t('daily_spin_label_prize_double') : t('daily_spin_label_prize'),
+    labelFull: (isGolden) =>
+      isGolden ? '2x ' + t('daily_spin_prize_booster_trio') : t('daily_spin_prize_booster_trio'),
+    apply: () => {
+      addBoosterFree('shuffle', 1);
+      addBoosterFree('bomb', 1);
+      addBoosterFree('color_bomb', 1);
+    },
+    applyDouble: () => {
+      addBoosterFree('shuffle', 2);
+      addBoosterFree('bomb', 2);
+      addBoosterFree('color_bomb', 2);
+    },
   },
 ];
 
@@ -292,7 +328,8 @@ export function openDailySpinModal() {
 
   const wheel = buildWheel();
   wheel.id = 'spin-wheel';
-  wheel.style.cssText = 'width:100%; height:100%; border-radius:50%; transition:transform 4s cubic-bezier(0.17,0.67,0.12,1); transform-origin:center center; will-change:transform;';
+  wheel.style.cssText =
+    'width:100%; height:100%; border-radius:50%; transition:transform 4s cubic-bezier(0.17,0.67,0.12,1); transform-origin:center center; will-change:transform;';
 
   // Pointer
   const pointer = document.createElement('div');
@@ -322,13 +359,15 @@ export function openDailySpinModal() {
   const respinBtn = document.createElement('button');
   respinBtn.id = 'respin-btn';
   respinBtn.className = 'glass-btn';
-  respinBtn.style.cssText = 'width:100%; font-size:0.85rem; font-weight:700; background:linear-gradient(135deg,#7c3aed,#4f46e5); display:none;';
+  respinBtn.style.cssText =
+    'width:100%; font-size:0.85rem; font-weight:700; background:linear-gradient(135deg,#7c3aed,#4f46e5); display:none;';
   respinBtn.textContent = t('daily_spin_respin_btn');
 
   // Close button
   const closeBtn = document.createElement('button');
   closeBtn.className = 'glass-btn';
-  closeBtn.style.cssText = 'width:100%; margin-top:0.5rem; font-weight:700; opacity:1; pointer-events:auto;';
+  closeBtn.style.cssText =
+    'width:100%; margin-top:0.5rem; font-weight:700; opacity:1; pointer-events:auto;';
   closeBtn.textContent = t('close');
   closeBtn.addEventListener('click', closeDailySpinModal);
 
@@ -345,7 +384,9 @@ export function openDailySpinModal() {
   // Set initial spin button state
   if (canSpinToday()) {
     spinBtn.textContent = t('daily_spin_spin_btn');
-    spinBtn.addEventListener('click', () => startSpin(wheel, resultArea, spinBtn, respinBtn, false));
+    spinBtn.addEventListener('click', () =>
+      startSpin(wheel, resultArea, spinBtn, respinBtn, false),
+    );
   } else if (canRespinToday()) {
     spinBtn.style.display = 'none';
     respinBtn.style.display = 'block';
@@ -357,7 +398,7 @@ export function openDailySpinModal() {
     spinBtn.textContent = t('daily_spin_already_spun');
   }
 
-  respinBtn.addEventListener('click', () => triggerRespinAd(wheel, resultArea, spinBtn, respinBtn));
+  respinBtn.addEventListener('click', () => triggerRespinAd());
 }
 
 export function closeDailySpinModal() {
@@ -374,7 +415,9 @@ function buildWheel(isGolden = false) {
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
-  const cx = size/2, cy = size/2, r = (size/2) - 2;
+  const cx = size / 2,
+    cy = size / 2,
+    r = size / 2 - 2;
 
   // Alternate Golden shades when in Respin mode
   const goldenPalettes = ['#F59E0B', '#D97706', '#B45309', '#FCD34D'];
@@ -388,7 +431,7 @@ function buildWheel(isGolden = false) {
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, r, startAngle, endAngle);
     ctx.closePath();
-    
+
     ctx.fillStyle = isGolden ? goldenPalettes[i % goldenPalettes.length] : prize.bg;
     ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.15)';
@@ -398,7 +441,7 @@ function buildWheel(isGolden = false) {
     // Label: Draw along the radius (vertically relative to the segment)
     const midAngle = startAngle + (SEGMENT_ANGLE / 2) * (Math.PI / 180);
     // Pull the anchor point slightly inward to avoid the rim
-    const textR = r * 0.72; 
+    const textR = r * 0.72;
     const tx = cx + textR * Math.cos(midAngle);
     const ty = cy + textR * Math.sin(midAngle);
 
@@ -418,11 +461,11 @@ function buildWheel(isGolden = false) {
     // Draw the SVG icon next to the text
     const img = ICONS[prize.imgKey];
     if (img && img.complete) {
-      ctx.shadowColor = 'transparent'; 
+      ctx.shadowColor = 'transparent';
       // Place icon just after the text
-      ctx.drawImage(img, 5, -8, 16, 16); 
+      ctx.drawImage(img, 5, -8, 16, 16);
     }
-    
+
     ctx.restore();
   });
 
@@ -440,7 +483,6 @@ function buildWheel(isGolden = false) {
 
 // ======================== SPIN LOGIC ========================
 
-let _currentWinnerIndex = null;
 let _isSpinning = false;
 
 function startSpin(wheel, resultArea, spinBtn, respinBtn, isRespin) {
@@ -452,12 +494,11 @@ function startSpin(wheel, resultArea, spinBtn, respinBtn, isRespin) {
 
   // Log daily feature used event for roulette
   analyticsManager.logCustomEvent(analyticsManager.Events.DAILY_FEATURE_USED, {
-    [analyticsManager.Params.FEATURE_NAME]: 'roulette'
+    [analyticsManager.Params.FEATURE_NAME]: 'roulette',
   });
 
   // Pick random winner
   const winnerIndex = Math.floor(Math.random() * TOTAL);
-  _currentWinnerIndex = winnerIndex;
 
   // Calculate angle: land the pointer (top, -90°) on the center of the winner segment
   const winnerMidAngle = winnerIndex * SEGMENT_ANGLE + SEGMENT_ANGLE / 2; // degrees from top
@@ -501,7 +542,7 @@ function showSpinResult(prize, isDouble) {
   `;
 }
 
-function triggerRespinAd(wheel, resultArea, spinBtn, respinBtn) {
+function triggerRespinAd() {
   if (!_showRewardedAd) return;
   // State changes are now handled globally inside _showRewardedAd in main.js
   _showRewardedAd('daily_spin_respin');

@@ -34,8 +34,8 @@ describe('generateBiomeBlock', () => {
 
   it('keeps the first block gentle: easy intro and no hard or boss levels', () => {
     const { levels } = generateBiomeBlock(0);
-    levels.slice(0, 5).forEach(l => expect(l.difficulty).toBe('easy'));
-    levels.forEach(l => expect(['easy', 'medium']).toContain(l.difficulty));
+    levels.slice(0, 5).forEach((l) => expect(l.difficulty).toBe('easy'));
+    levels.forEach((l) => expect(['easy', 'medium']).toContain(l.difficulty));
   });
 
   it('ends every later block with an extreme boss level', () => {

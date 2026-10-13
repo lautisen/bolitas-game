@@ -15,11 +15,46 @@ function tipHTML(icon, text) {
 // Tutorial levels match unlockLevel in economy.js SHOP_BOOSTERS
 // Prices match shop prices so the player always gets enough coins to buy
 export const BOOSTER_TUTORIALS = [
-  { level:  6, boosterId: 'sniper',      price: 100, icon: '🎯', name: 'Sniper',      tipKey: 'tutorial_sniper_tip' },
-  { level: 10, boosterId: 'shuffle',     price: 150, icon: '🔀', name: 'Shuffle',     tipKey: 'tutorial_shuffle_tip' },
-  { level: 16, boosterId: 'magic_brush', price: 250, icon: '🖌️', name: 'Magic Brush', tipKey: 'tutorial_magic_brush_tip' },
-  { level: 21, boosterId: 'bomb',        price: 350, icon: '💣', name: 'Bomb',        tipKey: 'tutorial_bomb_tip' },
-  { level: 26, boosterId: 'color_bomb',  price: 500, icon: '🌈', name: 'Color Bomb',  tipKey: 'tutorial_color_bomb_tip' },
+  {
+    level: 6,
+    boosterId: 'sniper',
+    price: 100,
+    icon: '🎯',
+    name: 'Sniper',
+    tipKey: 'tutorial_sniper_tip',
+  },
+  {
+    level: 10,
+    boosterId: 'shuffle',
+    price: 150,
+    icon: '🔀',
+    name: 'Shuffle',
+    tipKey: 'tutorial_shuffle_tip',
+  },
+  {
+    level: 16,
+    boosterId: 'magic_brush',
+    price: 250,
+    icon: '🖌️',
+    name: 'Magic Brush',
+    tipKey: 'tutorial_magic_brush_tip',
+  },
+  {
+    level: 21,
+    boosterId: 'bomb',
+    price: 350,
+    icon: '💣',
+    name: 'Bomb',
+    tipKey: 'tutorial_bomb_tip',
+  },
+  {
+    level: 26,
+    boosterId: 'color_bomb',
+    price: 500,
+    icon: '🌈',
+    name: 'Color Bomb',
+    tipKey: 'tutorial_color_bomb_tip',
+  },
 ];
 
 let currentTutorialPhase = 'select'; // 'select' | 'pop'
@@ -28,19 +63,19 @@ export function abortActiveTutorial() {
   setTutorialActive(false);
 
   if (window._currentTutorialCleanup) {
-     window._currentTutorialCleanup();
-     window._currentTutorialCleanup = null;
+    window._currentTutorialCleanup();
+    window._currentTutorialCleanup = null;
   }
 
   // Extra aggressive: remove any known overlay IDs that might block input
   document.getElementById('strict-tutorial-overlay')?.remove();
-  document.querySelectorAll('.booster-tutorial-tip').forEach(t => t.remove());
-  document.querySelectorAll('.tutorial-hand-indicator').forEach(h => h.remove());
+  document.querySelectorAll('.booster-tutorial-tip').forEach((t) => t.remove());
+  document.querySelectorAll('.tutorial-hand-indicator').forEach((h) => h.remove());
   hideTutorialDialog();
 }
 
 export function checkBoosterTutorial(levelNum, callbacks) {
-  const tutorial = BOOSTER_TUTORIALS.find(t => t.level === levelNum);
+  const tutorial = BOOSTER_TUTORIALS.find((t) => t.level === levelNum);
   if (!tutorial) return;
 
   const doneKey = `boosterTutorial_${tutorial.boosterId}_done`;
@@ -55,7 +90,7 @@ export function checkBoosterTutorial(levelNum, callbacks) {
 }
 
 export function startStrictBoosterTutorial(tutorial, callbacks) {
-  const { renderShopItems, updateHeaderCoins, renderPowerups } = callbacks;
+  const { renderShopItems, renderPowerups } = callbacks;
   setTutorialActive(true);
 
   // Step timeout: if player doesn't interact within 10s, exit gracefully
@@ -68,9 +103,12 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
     }, 10000);
   };
   const clearStepTimeout = () => {
-    if (_stepTimer) { clearTimeout(_stepTimer); _stepTimer = null; }
+    if (_stepTimer) {
+      clearTimeout(_stepTimer);
+      _stepTimer = null;
+    }
   };
-  
+
   // Create overlay for darkening grid
   const overlay = document.createElement('div');
   overlay.id = 'strict-tutorial-overlay';
@@ -95,22 +133,23 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
       currentAllowedElement.classList.remove('tutorial-target');
       // Cleanup any manual lifting for non-bolitas
       if (currentAllowedElement.style.zIndex === '20000') {
-         currentAllowedElement.style.zIndex = '';
-         if (currentAllowedElement.style.position === 'relative') currentAllowedElement.style.position = '';
+        currentAllowedElement.style.zIndex = '';
+        if (currentAllowedElement.style.position === 'relative')
+          currentAllowedElement.style.position = '';
       }
     }
-    
+
     // For non-bolitas (like shop buttons), we still need manual elevation
     if (!el.classList.contains('bolita')) {
-       el.style.position = 'relative';
-       el.style.zIndex = '20000';
+      el.style.position = 'relative';
+      el.style.zIndex = '20000';
     }
 
     const rect = el.getBoundingClientRect();
     // Prevent hand from going off-screen if element is near the bottom
     const isNearBottom = rect.bottom > window.innerHeight - 100;
     const topPos = isNearBottom ? rect.top - 44 : rect.bottom + 4;
-    
+
     tutHand.textContent = isNearBottom ? '👇' : '👆';
     tutHand.style.cssText = `
       position: fixed;
@@ -134,13 +173,13 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
 
   const clearTarget = (el) => {
     if (el) el.classList.remove('tutorial-target');
-  }
+  };
 
   // Intercept absolutely all clicks EXCEPT inside our allowed element (and magic brush picker)
   const clickInterceptor = (e) => {
     const isAllowed = currentAllowedElement && currentAllowedElement.contains(e.target);
     const isMagicBrushPicker = e.target.closest('.magic-brush-picker');
-    
+
     if (currentAllowedElement && !isAllowed && !isMagicBrushPicker) {
       e.stopPropagation();
       e.preventDefault();
@@ -165,7 +204,7 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
   // Step 1: Open Shop
   const shopBtn = document.getElementById('header-shop-btn');
   moveHandTo(shopBtn);
-  
+
   // Bring header to front so its click isn't beneath overlay
   const gameHeader = document.querySelector('#game-container header');
   if (gameHeader) {
@@ -180,7 +219,7 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
   const onShopOpen = (e) => {
     e.stopPropagation();
     e.preventDefault(); // manual trigger handling
-    
+
     if (shopBtn) {
       clearTarget(shopBtn);
       shopBtn.removeEventListener('click', onShopOpen);
@@ -191,7 +230,7 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
     // Populate and open shop manually
     document.getElementById('shop-coin-count').innerText = getCoins();
     renderShopItems('boosters');
-    document.querySelectorAll('.shop-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.shop-tab').forEach((t) => t.classList.remove('active'));
     document.querySelector('.shop-tab[data-tab="boosters"]').classList.add('active');
     document.getElementById('shop-screen').classList.remove('hidden');
     document.getElementById('powerups-bar').classList.add('hidden'); // Hide bar during shop
@@ -205,7 +244,7 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
 
     const highlightBuyBtn = () => {
       const shopItems = Array.from(document.querySelectorAll('.shop-item'));
-      const targetItem = shopItems.find(item => item.dataset.boosterId === tutorial.boosterId);
+      const targetItem = shopItems.find((item) => item.dataset.boosterId === tutorial.boosterId);
       if (targetItem) {
         const buyBtn = targetItem.querySelector('.shop-item-price');
         moveHandTo(buyBtn);
@@ -213,10 +252,10 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
 
         const onBuyComplete = () => {
           if (getBoosterCount(tutorial.boosterId) <= 0) return; // purchase didn't succeed
-          
+
           clearTarget(buyBtn);
           buyBtn.removeEventListener('click', onBuyComplete);
-          
+
           // --- AUTOMATED SHOP CLOSURE FOR TUTORIALS ---
           setTimeout(() => {
             closeShop(); // Close the shop automatically
@@ -225,19 +264,24 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
             step1Tip.style.zIndex = ''; // Restore tip box relative location
             const bName = t(`booster_${tutorial.boosterId}_name`);
             step1Tip.innerHTML = tipHTML(tutorial.icon, t('tutorial_use_booster', { name: bName }));
-            
+
             // Force UI update so the newly bought booster throws away its grayscale "empty" state
             if (renderPowerups) renderPowerups();
-            
+
             const waitForBoosterUse = () => {
-              const powerupsBtn = document.querySelector(`.powerup-btn[data-booster="${tutorial.boosterId}"]`);
+              const powerupsBtn = document.querySelector(
+                `.powerup-btn[data-booster="${tutorial.boosterId}"]`,
+              );
               if (powerupsBtn) {
                 moveHandTo(powerupsBtn);
                 resetStepTimeout(); // Step 3: waiting for booster button click
 
                 const checker = setInterval(() => {
                   // Check if selected/active
-                  if (powerupsBtn.classList.contains('active-target') || powerupsBtn.classList.contains('selected')) {
+                  if (
+                    powerupsBtn.classList.contains('active-target') ||
+                    powerupsBtn.classList.contains('selected')
+                  ) {
                     clearInterval(checker);
                     clearTarget(powerupsBtn);
 
@@ -248,33 +292,42 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
                     } else {
                       // Bomb / Color Bomb: Now ask to click a ball
                       const bName2 = t(`booster_${tutorial.boosterId}_name`);
-                      step1Tip.innerHTML = tipHTML('👆', t('tutorial_click_ball', { name: bName2 }));
-                      
+                      step1Tip.innerHTML = tipHTML(
+                        '👆',
+                        t('tutorial_click_ball', { name: bName2 }),
+                      );
+
                       // Clear all stray highlights from gameplay or previous steps
-                      document.querySelectorAll('.bolita').forEach(b => {
+                      document.querySelectorAll('.bolita').forEach((b) => {
                         b.classList.remove('hint', 'tutorial-target');
                       });
 
                       // IMPORTANT: only look for bolitas INSIDE the #grid container
                       const gridEl = document.getElementById('grid');
                       if (gridEl) gridEl.classList.add('grid-lifted'); // Start lifting early
-                      
+
                       // Precise search for center-ish ball based on grid dimensions
-                      let maxR = 0, maxC = 0;
-                      document.querySelectorAll('#grid .bolita').forEach(b => {
+                      let maxR = 0,
+                        maxC = 0;
+                      document.querySelectorAll('#grid .bolita').forEach((b) => {
                         const r = parseInt(b.dataset.row);
                         const c = parseInt(b.dataset.col);
                         if (!isNaN(r)) maxR = Math.max(maxR, r);
                         if (!isNaN(c)) maxC = Math.max(maxC, c);
                       });
-                      
+
                       const midR = Math.floor(maxR / 2);
                       const midC = Math.floor(maxC / 2);
-                      
+
                       // Target exact middle first, then one row below
-                      let targetBall = document.querySelector(`#grid .bolita[data-row="${midR}"][data-col="${midC}"]`);
-                      if (!targetBall) targetBall = document.querySelector(`#grid .bolita[data-row="${midR + 1}"][data-col="${midC}"]`);
-                      
+                      let targetBall = document.querySelector(
+                        `#grid .bolita[data-row="${midR}"][data-col="${midC}"]`,
+                      );
+                      if (!targetBall)
+                        targetBall = document.querySelector(
+                          `#grid .bolita[data-row="${midR + 1}"][data-col="${midC}"]`,
+                        );
+
                       // Final fallback to middle of DOM list if attributes fail
                       if (!targetBall) {
                         const balls = Array.from(document.querySelectorAll('#grid .bolita'));
@@ -293,7 +346,10 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
                             clearInterval(useChecker);
                             clearTarget(targetBall);
                             cleanupTutorial();
-                            localStorage.setItem(`boosterTutorial_${tutorial.boosterId}_done`, 'true');
+                            localStorage.setItem(
+                              `boosterTutorial_${tutorial.boosterId}_done`,
+                              'true',
+                            );
                           }
                         }, 200);
                       } else {
@@ -330,18 +386,26 @@ export function startStrictBoosterTutorial(tutorial, callbacks) {
   } else {
     // Failsafe
     setTimeout(() => {
-       const retryBtn = document.getElementById('header-shop-btn');
-       if (retryBtn) {
-         resetStepTimeout();
-         retryBtn.addEventListener('click', onShopOpen);
-       }
+      const retryBtn = document.getElementById('header-shop-btn');
+      if (retryBtn) {
+        resetStepTimeout();
+        retryBtn.addEventListener('click', onShopOpen);
+      }
     }, 500);
   }
 }
 
 // ======================== TUTORIAL DIALOG SYSTEM ========================
 
-function showTutorialDialog({ icon = '', title = '', message, btnText = null, onNext = null, autoDismiss = 0, blocking = false }) {
+function showTutorialDialog({
+  icon = '',
+  title = '',
+  message,
+  btnText = null,
+  onNext = null,
+  autoDismiss = 0,
+  blocking = false,
+}) {
   hideTutorialDialog();
 
   let backdrop = null;
@@ -459,7 +523,7 @@ export function showAdventureTutorial(callbacks) {
 
   if (sizeGrid) requestAnimationFrame(sizeGrid);
 
-  greenPos.forEach(key => {
+  greenPos.forEach((key) => {
     const [r, c] = key.split(',').map(Number);
     if (grid[r] && grid[r][c] && grid[r][c].el) {
       grid[r][c].el.classList.add('hint');

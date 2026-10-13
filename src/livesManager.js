@@ -21,7 +21,9 @@ function _load() {
       _lives = typeof d.lives === 'number' ? d.lives : MAX_LIVES;
       _lastUpdate = typeof d.lastUpdate === 'number' ? d.lastUpdate : null;
     }
-  } catch { /* use defaults */ }
+  } catch {
+    /* use defaults */
+  }
 }
 
 function _save() {
@@ -36,7 +38,10 @@ _load();
  */
 export function checkAndRefill() {
   if (_lives >= MAX_LIVES) {
-    if (_lastUpdate !== null) { _lastUpdate = null; _save(); }
+    if (_lastUpdate !== null) {
+      _lastUpdate = null;
+      _save();
+    }
     return;
   }
   if (!_lastUpdate) return;
@@ -56,7 +61,9 @@ export function getLives() {
   return _lives;
 }
 
-export function getMaxLives() { return MAX_LIVES; }
+export function getMaxLives() {
+  return MAX_LIVES;
+}
 
 /**
  * Consume one life.
