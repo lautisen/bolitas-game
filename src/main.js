@@ -5,6 +5,7 @@ import { playSelectSound, playPopSound, playErrorSound, playGameOverSound, playW
 import { checkAppVersion } from './versionCheck.js';
 import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { FirebaseAnalytics } from '@capacitor-firebase/analytics';
 import { FirebaseCrashlytics } from '@capacitor-firebase/crashlytics';
@@ -148,11 +149,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   requestNotificationPermission();
 
   // Configure Status Bar — let the OS handle text contrast automatically
-  try {
-    StatusBar.setStyle({ style: Style.Default });
-    StatusBar.setOverlaysWebView({ overlay: false });
-  } catch (e) {
-    console.warn('StatusBar not available', e);
+  if (Capacitor.isNativePlatform()) {
+    StatusBar.setStyle({ style: Style.Default }).catch(e => console.warn('StatusBar not available', e));
+    StatusBar.setOverlaysWebView({ overlay: false }).catch(e => console.warn('StatusBar not available', e));
   }
 
   // UI Handlers
@@ -531,12 +530,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   setInterval(() => { checkAndRefill(); updateLivesUI(); }, 1000);
 
   checkExistingSession();
-  initAdMob().then(() => {
-    // Show banner after a small delay to ensure native view is ready
-    setTimeout(() => {
-      showBannerAd().catch(e => console.warn("Banner delayed init failed", e));
-    }, 2000);
-  }).catch(e => console.error("initAdMob failed:", e));
+  // AdMob is native-only: its web stub always reports consent as REQUIRED,
+  // which would lock the web build behind the consent screen
+  if (Capacitor.isNativePlatform()) {
+    initAdMob().then(() => {
+      // Show banner after a small delay to ensure native view is ready
+      setTimeout(() => {
+        showBannerAd().catch(e => console.warn("Banner delayed init failed", e));
+      }, 2000);
+    }).catch(e => console.error("initAdMob failed:", e));
+  }
 
   // Consent Required Screen Handlers
   document.getElementById('retry-consent-btn').addEventListener('click', async () => {
@@ -1106,7 +1109,7 @@ async function shuffleBoard() {
     [flatItems[i], flatItems[j]] = [flatItems[j], flatItems[i]];
   }
 
-  uiGrid.innerHTML = '';
+  clearGridElements();
   elementPositionMap = new WeakMap();
 
   // Phase 2: Animate IN
@@ -1391,7 +1394,7 @@ function initGame(isRevive = false, rerollAttempt = 0) {
   document.getElementById('powerups-bar').classList.remove('hidden');
   document.getElementById('powerups-bar').style.visibility = '';
   
-  uiGrid.innerHTML = '';
+  clearGridElements();
   elementPositionMap = new WeakMap(); // Clear position mapping for new game
   activePowerup = null;
   if (!isRevive) {
@@ -1500,6 +1503,12 @@ function initGame(isRevive = false, rerollAttempt = 0) {
 
 
 
+
+// Remove every piece from the grid but keep the selection outline SVG that lives inside it
+function clearGridElements() {
+  const outline = document.getElementById('selection-outline');
+  uiGrid.replaceChildren(...(outline ? [outline] : []));
+}
 
 function sizeGrid() {
   const gameArea = document.querySelector('.game-area');
@@ -2687,7 +2696,7 @@ function showTutorial() {
     showBannerAd,
     clearGrid: (rows, cols) => {
       grid = Array.from({ length: rows }, () => new Array(cols).fill(null));
-      uiGrid.innerHTML = '';
+      clearGridElements();
       return grid;
     },
     setHeaderMode: (text) => { if (uiHeaderMode) uiHeaderMode.innerText = text; },
