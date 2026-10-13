@@ -36,11 +36,18 @@ import {
   getStarCount,
   getStarProgress,
 } from './scoring.js';
-import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
+import {
+  initAdMob,
+  maybeShowInterstitial,
+  prepareRewarded,
+  retryConsent,
+  showBannerAd,
+  showPityRewardAd,
+  showRewardedAd,
+} from './ads.js';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { FirebaseAnalytics } from '@capacitor-firebase/analytics';
 import { FirebaseCrashlytics } from '@capacitor-firebase/crashlytics';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -109,7 +116,6 @@ let prestartAdsThisTry = 0;
 // Colors ordered by visual distinctiveness — levels using fewer colors get the first N entries
 const COLORS = ['red', 'blue', 'yellow', 'green', 'pink', 'cyan'];
 // AdMob Banner ID
-const BANNER_ID = 'ca-app-pub-3539090903954344/8982185366';
 
 // Level data is now generated dynamically from biomes.js
 // Use getLevelData(globalLevel) for any level (1-indexed, infinite)
@@ -154,13 +160,10 @@ let isColorblindEnabled = localStorage.getItem('bolitasColorblindEnabled') === '
 let hintTimeout = null;
 const HINT_DELAY = 5000; // 5 seconds
 let hasUsedRevive = false;
-let isBannerCreated = false;
-let isAdLoading = false;
 let levelCompleted = false;
 let boardClearThisLevel = false;
 let activePowerup = null;
 let boostersUsedInLevel = {};
-let lastAdTimestamp = Date.now();
 
 // Performance: O(1) element-to-position lookup instead of O(rows*cols) scan
 let elementPositionMap = new WeakMap();
@@ -555,19 +558,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('win-continue-btn').addEventListener('click', async () => {
       document.getElementById('win-screen').classList.add('hidden');
 
-      // Centralized interstitial policy:
-      // Show every 10 levels OR if 7 minutes passed
       const globalLevel = (parseInt(localStorage.getItem('bolitasLevel')) || 0) + 1;
-      const now = Date.now();
-      const timeDiff = now - lastAdTimestamp;
-
-      const shouldByLevel = globalLevel >= 10 && globalLevel % 10 === 0;
-      const shouldByTime = timeDiff > 420000;
-
-      if (shouldByLevel || shouldByTime) {
-        console.log(`Ad triggered by ${shouldByLevel ? 'level' : 'time'}. Showing interstitial.`);
-        await showInterstitialAd();
-      }
+      await maybeShowInterstitial(globalLevel);
 
       // Go back to level select — only animate unlock if this was a first-time completion
       const justUnlocked = window._justUnlockedLevel ?? null;
@@ -601,7 +593,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // AdMob is native-only: its web stub always reports consent as REQUIRED,
     // which would lock the web build behind the consent screen
     if (Capacitor.isNativePlatform()) {
-      initAdMob()
+      initAdMob({ onReward: handleAdReward })
         .then(() => {
           // Show banner after a small delay to ensure native view is ready
           setTimeout(() => {
@@ -612,10 +604,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Consent Required Screen Handlers
-    document.getElementById('retry-consent-btn').addEventListener('click', async () => {
-      await AdMob.showConsentForm();
-      await handleConsentFlow();
-    });
+    document.getElementById('retry-consent-btn').addEventListener('click', retryConsent);
     document.getElementById('exit-app-btn').addEventListener('click', () => {
       App.exitApp();
     });
@@ -636,461 +625,101 @@ function hideSplashScreen() {
   }
 }
 
-async function handleConsentFlow() {
-  try {
-    // 1. Request consent info
-    const consentInfo = await AdMob.requestConsentInfo();
-    console.log('Consent Info:', consentInfo);
-
-    // 2. Show consent form if required (and not already shown/dismissed)
-    let finalInfo = consentInfo;
-    if (consentInfo.isConsentFormAvailable && consentInfo.status === 'REQUIRED') {
-      await AdMob.showConsentForm();
-      // Re-verify after showing
-      const updatedInfo = await AdMob.requestConsentInfo();
-      if (updatedInfo.status === 'REQUIRED' || updatedInfo.status === 'UNKNOWN') {
-        document.getElementById('consent-required-screen').classList.remove('hidden');
-        return false;
-      }
-      finalInfo = updatedInfo; // Use post-form status for all subsequent checks
+// What each rewarded ad grants once the user has watched it
+function handleAdReward(type, data) {
+  if (type === 'swap_quest') {
+    if (swapQuest(data)) {
+      if (isAudioEnabled) playCoinSound();
+      renderQuests();
     }
-
-    // 3. Evaluate consent status using the most recent info
-    if (finalInfo.status === 'REQUIRED' || finalInfo.status === 'UNKNOWN') {
-      document.getElementById('consent-required-screen').classList.remove('hidden');
-      return false;
+  } else if (type === 'daily_spin_respin') {
+    // Delegate to the dailySpin module's respin reward handler
+    if (window._dailySpinOnRespinAdRewarded) window._dailySpinOnRespinAdRewarded();
+    if (isAudioEnabled) playCoinSound();
+  } else if (type === 'swap_weekly_quest') {
+    if (swapWeeklyQuest(data)) {
+      if (isAudioEnabled) playCoinSound();
+      renderQuests();
     }
+  } else if (type === 'double_coins') {
+    const extraCoins = data || 0;
+    if (extraCoins > 0) {
+      addCoins(extraCoins);
+      window._winCoinsEarned = (window._winCoinsEarned || 0) + extraCoins;
+      document.getElementById('win-coins').innerText = `+${window._winCoinsEarned}`;
+      updateHeaderCoins();
 
-    // If we reach here, consent is OBTAINED or NOT_REQUIRED
-    document.getElementById('consent-required-screen').classList.add('hidden');
-
-    const isConsentObtained =
-      finalInfo.status === 'OBTAINED' || finalInfo.status === 'NOT_REQUIRED';
-    await FirebaseAnalytics.setEnabled({ enabled: isConsentObtained });
-
-    if (isConsentObtained) {
-      // Pre-load ads
-      prepareInterstitial();
-      prepareRewarded('revive'); // Preload default revive
-      prepareRewarded('shop_coins'); // Preload shop coins
-      showBannerAd();
+      if (isAudioEnabled) playCoinSound();
+      const headerCoins = document.getElementById('header-coin-count');
+      headerCoins.classList.remove('reward-pulse');
+      void headerCoins.offsetWidth;
+      headerCoins.classList.add('reward-pulse');
     }
+    document.getElementById('win-x2-btn').classList.add('hidden');
+    document.getElementById('reward-ready-screen').classList.remove('hidden');
+  } else if (type === 'get_xp') {
+    const xpToGain = getXPForNextLevel();
+    const res = addXP(xpToGain);
+    updateMenuPlayerLevel();
 
-    return true;
-  } catch (err) {
-    console.error('Consent flow error:', err);
-    // If it fails, we might want to fail open or closed depending on policy.
-    // Here we proceed but log the error.
-    return true;
-  }
-}
+    // Show confirmation
+    const textEl = document.getElementById('reward-ready-text');
+    textEl.innerHTML = `${t('bonus_xp_earned')}<br>✨ +${xpToGain} XP`;
+    document.getElementById('reward-ready-screen').classList.remove('hidden');
 
-async function initAdMob() {
-  try {
-    // Initialize AdMob with COPPA compliance settings
-    await AdMob.initialize({
-      tagForChildDirectedTreatment: true,
-      maxAdContentRating: 'G',
+    analyticsManager.logCustomEvent(analyticsManager.Events.XP_REWARD_CLAIMED, {
+      amount: xpToGain,
+      level: res.newLevel,
     });
-    console.log('AdMob initialized');
+    analyticsManager.setUserProperty('player_level', res.newLevel);
+  } else if (type === 'pity_revive') {
+    addBoosterFree('color_bomb', 1);
+    applyReviveReward(true);
+  } else if (type === 'shop_coins') {
+    const rewardAmount = 100;
+    addCoins(rewardAmount);
+    registerCoinAdWatched();
+    updateHeaderCoins();
+    const shopCoinEl = document.getElementById('shop-coin-count');
+    if (shopCoinEl) shopCoinEl.innerText = getCoins();
 
-    // Handle GDPR/UMP Consent Flow
-    const canProceed = await handleConsentFlow();
-    if (!canProceed) return;
+    if (isAudioEnabled) playCoinSound();
+    const textEl = document.getElementById('reward-ready-text');
+    textEl.innerHTML = `🪙 +${rewardAmount}`;
+    document.getElementById('reward-ready-screen').classList.remove('hidden');
 
-    analyticsManager.logCustomEvent(analyticsManager.Events.ADMOB_INITIALIZED);
-
-    // Rewarded ad listeners (v8 event names from source)
-    const onRewarded = (rewardItem) => {
-      const type = _rewardActionType || 'unknown';
-      const data = _rewardActionData;
-      console.log('User was rewarded for:', type, rewardItem);
-
-      // Log ad reward watched event
-      analyticsManager.logCustomEvent('ad_reward_watched', {
-        placement: type,
-      });
-
-      if (type === 'swap_quest') {
-        if (swapQuest(data)) {
-          if (isAudioEnabled) playCoinSound();
-          renderQuests();
-        }
-      } else if (type === 'daily_spin_respin') {
-        // Delegate to the dailySpin module's respin reward handler
-        if (window._dailySpinOnRespinAdRewarded) window._dailySpinOnRespinAdRewarded();
-        if (isAudioEnabled) playCoinSound();
-      } else if (type === 'swap_weekly_quest') {
-        if (swapWeeklyQuest(data)) {
-          if (isAudioEnabled) playCoinSound();
-          renderQuests();
-        }
-      } else if (type === 'double_coins') {
-        const extraCoins = data || 0;
-        if (extraCoins > 0) {
-          addCoins(extraCoins);
-          window._winCoinsEarned = (window._winCoinsEarned || 0) + extraCoins;
-          document.getElementById('win-coins').innerText = `+${window._winCoinsEarned}`;
-          updateHeaderCoins();
-
-          if (isAudioEnabled) playCoinSound();
-          const headerCoins = document.getElementById('header-coin-count');
-          headerCoins.classList.remove('reward-pulse');
-          void headerCoins.offsetWidth;
-          headerCoins.classList.add('reward-pulse');
-        }
-        document.getElementById('win-x2-btn').classList.add('hidden');
-        document.getElementById('reward-ready-screen').classList.remove('hidden');
-      } else if (type === 'get_xp') {
-        const xpToGain = getXPForNextLevel();
-        const res = addXP(xpToGain);
-        updateMenuPlayerLevel();
-
-        // Show confirmation
-        const textEl = document.getElementById('reward-ready-text');
-        textEl.innerHTML = `${t('bonus_xp_earned')}<br>✨ +${xpToGain} XP`;
-        document.getElementById('reward-ready-screen').classList.remove('hidden');
-
-        analyticsManager.logCustomEvent(analyticsManager.Events.XP_REWARD_CLAIMED, {
-          amount: xpToGain,
-          level: res.newLevel,
-        });
-        analyticsManager.setUserProperty('player_level', res.newLevel);
-      } else if (type === 'pity_revive') {
-        addBoosterFree('color_bomb', 1);
-        applyReviveReward(true);
-      } else if (type === 'shop_coins') {
-        const rewardAmount = 100;
-        addCoins(rewardAmount);
-        registerCoinAdWatched();
-        updateHeaderCoins();
-        const shopCoinEl = document.getElementById('shop-coin-count');
-        if (shopCoinEl) shopCoinEl.innerText = getCoins();
-
-        if (isAudioEnabled) playCoinSound();
-        const textEl = document.getElementById('reward-ready-text');
-        textEl.innerHTML = `🪙 +${rewardAmount}`;
-        document.getElementById('reward-ready-screen').classList.remove('hidden');
-
-        analyticsManager.logCustomEvent(analyticsManager.Events.COIN_REWARD_CLAIMED, {
-          amount: rewardAmount,
-        });
-        analyticsManager.setUserProperty('total_coins', getCoins());
-      } else if (type === 'prestart_buff') {
-        // Count against the 2-per-try limit only when the reward was actually earned
-        prestartAdsThisTry++;
-        // Grant a random unlocked booster (not shuffle, preferring more impactful ones)
-        const buffBoosters = SHOP_BOOSTERS.filter((b) => b.id !== 'shuffle');
-        const chosen = buffBoosters[Math.floor(Math.random() * buffBoosters.length)];
-        addBoosterFree(chosen.id, 1);
-        if (isAudioEnabled) playCoinSound();
-        const textEl = document.getElementById('reward-ready-text');
-        const boosterName = t(`booster_${chosen.id}_name`);
-        textEl.innerHTML = `${chosen.icon} +1 ${boosterName}!`;
-        document.getElementById('reward-ready-screen').classList.remove('hidden');
-
-        analyticsManager.logCustomEvent(analyticsManager.Events.PRESTART_BUFF_CLAIMED, {
-          booster: chosen.id,
-        });
-      } else if (type === 'revive') {
-        applyReviveReward();
-      } else if (type === 'get_life') {
-        addLife(1);
-        updateLivesUI();
-        scheduleLivesNotification();
-        document.getElementById('out-of-lives-screen').classList.add('hidden');
-
-        // If they were trying to start a level, bring them back to the pre-start screen
-        if (window._pendingLevelIndex !== undefined) {
-          showLevelPreStartScreen(window._pendingLevelIndex);
-          window._pendingLevelIndex = undefined;
-        }
-      }
-
-      lastAdTimestamp = Date.now();
-      _rewardActionType = null;
-      _rewardActionData = null;
-    };
-    const hideLoading = () => {
-      console.log('Hiding ad loading screen');
-      isAdLoading = false; // Reset global flag
-      document.getElementById('ad-loading-screen').classList.add('hidden');
-      if (adLoadingTimeout) {
-        clearTimeout(adLoadingTimeout);
-        adLoadingTimeout = null;
-      }
-      showBannerAd();
-    };
-
-    // Try both naming conventions for robustness across versions
-    const events = [
-      'interstitialAdDismissed',
-      'onInterstitialAdDismissed',
-      'interstitialAdFailedToLoad',
-      'onInterstitialAdFailedToLoad',
-      'interstitialAdFailedToShow',
-      'onInterstitialAdFailedToShow',
-      'rewardVideoAdDismissed',
-      'onRewardedVideoAdDismissed',
-      'rewardVideoAdFailedToLoad',
-      'onRewardedVideoAdFailedToLoad',
-      'rewardVideoAdFailedToShow',
-      'onRewardedVideoAdFailedToShow',
-    ];
-
-    events.forEach((eventName) => {
-      AdMob.addListener(eventName, (info) => {
-        console.log(`[AdMob] Event: ${eventName}`, info);
-        hideLoading();
-      });
+    analyticsManager.logCustomEvent(analyticsManager.Events.COIN_REWARD_CLAIMED, {
+      amount: rewardAmount,
     });
+    analyticsManager.setUserProperty('total_coins', getCoins());
+  } else if (type === 'prestart_buff') {
+    // Count against the 2-per-try limit only when the reward was actually earned
+    prestartAdsThisTry++;
+    // Grant a random unlocked booster (not shuffle, preferring more impactful ones)
+    const buffBoosters = SHOP_BOOSTERS.filter((b) => b.id !== 'shuffle');
+    const chosen = buffBoosters[Math.floor(Math.random() * buffBoosters.length)];
+    addBoosterFree(chosen.id, 1);
+    if (isAudioEnabled) playCoinSound();
+    const textEl = document.getElementById('reward-ready-text');
+    const boosterName = t(`booster_${chosen.id}_name`);
+    textEl.innerHTML = `${chosen.icon} +1 ${boosterName}!`;
+    document.getElementById('reward-ready-screen').classList.remove('hidden');
 
-    // Keep the reward listener as is since it doesn't hide the loading screen (dismissal does)
-    AdMob.addListener('onRewardedVideoAdReward', onRewarded);
-    AdMob.addListener('rewardVideoAdReward', onRewarded);
-
-    AdMob.addListener('rewardVideoAdDismissed', () => {
-      console.log('[AdMob] Ad dismissed, preloading next...');
-      prepareRewarded('revive');
-      prepareRewarded('shop_coins');
+    analyticsManager.logCustomEvent(analyticsManager.Events.PRESTART_BUFF_CLAIMED, {
+      booster: chosen.id,
     });
+  } else if (type === 'revive') {
+    applyReviveReward();
+  } else if (type === 'get_life') {
+    addLife(1);
+    updateLivesUI();
+    scheduleLivesNotification();
+    document.getElementById('out-of-lives-screen').classList.add('hidden');
 
-    AdMob.addListener('rewardVideoAdFailedToLoad', (info) => {
-      console.warn('[AdMob] Reward ad failed to load:', info);
-      analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
-        [analyticsManager.Params.AD_TYPE]: 'rewarded',
-        error_code: info?.errorCode ?? 'unknown',
-      });
-      FirebaseCrashlytics.recordException({
-        message: `Ad failed to load: rewarded - ${info?.errorCode}`,
-      }).catch(() => {});
-      setTimeout(() => prepareRewarded('revive'), 15000);
-    });
-
-    AdMob.addListener('onRewardedVideoAdFailedToLoad', (info) => {
-      console.warn('[AdMob] Reward ad failed to load (legacy):', info);
-      analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
-        [analyticsManager.Params.AD_TYPE]: 'rewarded_legacy',
-        error_code: info?.errorCode ?? 'unknown',
-      });
-    });
-
-    // Update --banner-height to match actual native banner size
-    AdMob.addListener('bannerAdLoaded', (size) => {
-      if (size && size.height) {
-        document.documentElement.style.setProperty(
-          '--banner-height',
-          `${Math.ceil(size.height)}px`,
-        );
-      }
-    });
-
-    // Show banner globally as soon as initialized
-    showBannerAd();
-  } catch (err) {
-    console.error('AdMob initialization failed', err);
-  }
-}
-
-async function prepareInterstitial() {
-  try {
-    const options = {
-      adId: 'ca-app-pub-3539090903954344/2163380169',
-      isTesting: false,
-      tagForChildDirectedTreatment: true,
-      maxAdContentRating: 'G',
-    };
-    await AdMob.prepareInterstitial(options);
-  } catch (err) {
-    console.error('Prepare Interstitial Error', err);
-    analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
-      [analyticsManager.Params.AD_TYPE]: 'interstitial',
-      error_code: err?.message ?? 'unknown',
-    });
-  }
-}
-
-// Global ad readiness tracker
-window._rewardedAdsReady = {
-  revive: false,
-  shop_coins: false,
-  pity_revive: false,
-};
-
-async function prepareRewarded(type = 'revive') {
-  try {
-    let adId = 'ca-app-pub-3539090903954344/5831162433'; // Default revive
-    if (type === 'shop_coins') adId = 'ca-app-pub-3539090903954344/7787144841';
-    else if (type === 'pity_revive') adId = 'ca-app-pub-3539090903954344/8952150762';
-
-    const options = {
-      adId: adId,
-      isTesting: false,
-      tagForChildDirectedTreatment: true,
-      maxAdContentRating: 'G',
-    };
-    await AdMob.prepareRewardVideoAd(options);
-    window._rewardedAdsReady[type] = true;
-    console.log(`[AdMob] Preloaded rewarded ad: ${type}`);
-  } catch (err) {
-    window._rewardedAdsReady[type] = false;
-    console.error(`Prepare Rewarded Error (${type})`, err);
-    analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
-      [analyticsManager.Params.AD_TYPE]: `rewarded_${type}`,
-      error_code: err?.message ?? 'unknown',
-    });
-  }
-}
-
-let adLoadingTimeout = null;
-
-async function showInterstitialAd() {
-  if (isAdLoading) return;
-  isAdLoading = true;
-
-  let loadingTimeout = null;
-  try {
-    // Only show loading screen if the ad doesn't open within 250ms
-    loadingTimeout = setTimeout(() => {
-      document.getElementById('ad-loading-screen').classList.remove('hidden');
-    }, 250);
-
-    // No need to await prepare again here if we pre-load it elsewhere,
-    // but the plugin handles it fine if it's already cached.
-    await AdMob.showInterstitial();
-
-    lastAdTimestamp = Date.now();
-    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, {
-      [analyticsManager.Params.AD_TYPE]: 'interstitial',
-    });
-  } catch (err) {
-    console.error('Show Interstitial Error', err);
-  } finally {
-    if (loadingTimeout) {
-      clearTimeout(loadingTimeout);
-      loadingTimeout = null;
-    }
-    isAdLoading = false;
-    document.getElementById('ad-loading-screen').classList.add('hidden');
-  }
-}
-
-async function showPityRewardAd() {
-  showRewardedAd('pity_revive');
-}
-
-let _rewardActionType = null;
-let _rewardActionData = null;
-
-async function showRewardedAd(type = 'revive', data = null) {
-  if (isAdLoading) return; // Prevent multiple taps
-  isAdLoading = true;
-
-  _rewardActionType = type;
-  _rewardActionData = data;
-
-  let btn = null;
-  let originalText = '';
-
-  if (type === 'revive') btn = document.getElementById('revive-btn');
-  else if (type === 'get_xp') btn = document.getElementById('get-xp-ad-btn');
-  else if (type === 'daily_spin_respin') btn = document.getElementById('respin-btn');
-  else if (type === 'prestart_buff') btn = document.getElementById('prestart-ad-buff-btn');
-  else if (type === 'shop_coins') btn = document.getElementById('watch-ad-btn');
-  else if (type === 'double_coins') btn = document.getElementById('win-x2-btn');
-
-  if (btn) {
-    originalText = btn.innerHTML; // Save full HTML to preserve SVGs
-    btn.innerHTML = `⏳ ${t('ad_loading')}`;
-    btn.style.opacity = '0.6';
-    btn.style.pointerEvents = 'none';
-    btn.disabled = true;
-  }
-
-  let loadingTimeout = null;
-  let adTimedOut = false;
-  try {
-    // Only show loading screen if the ad doesn't open within 250ms
-    loadingTimeout = setTimeout(() => {
-      document.getElementById('ad-loading-screen').classList.remove('hidden');
-    }, 250);
-
-    // Explicitly set the reward type again inside the try block to be safe
-    _rewardActionType = type;
-    _rewardActionData = data;
-
-    let selectedAdId = 'ca-app-pub-3539090903954344/5831162433'; // Default revive ID
-    if (type === 'shop_coins') {
-      selectedAdId = 'ca-app-pub-3539090903954344/7787144841'; // Shop Coins ID
-    } else if (type === 'pity_revive') {
-      selectedAdId = 'ca-app-pub-3539090903954344/8952150762'; // Pity Lose ID
-    }
-
-    const options = {
-      adId: selectedAdId,
-      isTesting: false,
-      tagForChildDirectedTreatment: true,
-      maxAdContentRating: 'G',
-    };
-
-    // Map type to the readiness key (multiple types share the same ad unit)
-    const readinessKey =
-      type === 'shop_coins' ? 'shop_coins' : type === 'pity_revive' ? 'pity_revive' : 'revive';
-
-    // Optimization: If NOT already preloaded, call prepare which blocks until ready.
-    // If it WAS preloaded, showRewardVideoAd should be instant.
-    if (!window._rewardedAdsReady[readinessKey]) {
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('AD_TIMEOUT')), 10000),
-      );
-      await Promise.race([AdMob.prepareRewardVideoAd(options), timeoutPromise]);
-    }
-    // Mark as consumed so a second tap doesn't skip prepare on a spent ad
-    window._rewardedAdsReady[readinessKey] = false;
-
-    await AdMob.showRewardVideoAd();
-
-    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, {
-      [analyticsManager.Params.AD_TYPE]: 'rewarded',
-    });
-  } catch (err) {
-    const isNoFill =
-      err.message === 'AD_TIMEOUT' ||
-      err.message?.includes('No fill') ||
-      err.message?.includes('eCPM floor') ||
-      err.message?.includes('No ads');
-    if (isNoFill) {
-      adTimedOut = true;
-      const loadingScreen = document.getElementById('ad-loading-screen');
-      const spinner = loadingScreen?.querySelector('.loader-spinner');
-      const msgEl = loadingScreen?.querySelector('#ad-loading-messages');
-      if (spinner) spinner.style.display = 'none';
-      if (msgEl) msgEl.innerHTML = `<p>⚠️ ${t('ad_unavailable')}</p>`;
-      await new Promise((r) => setTimeout(r, 2000));
-    } else {
-      console.error('Show Rewarded Error', err);
-    }
-  } finally {
-    if (loadingTimeout) {
-      clearTimeout(loadingTimeout);
-      loadingTimeout = null;
-    }
-    isAdLoading = false;
-    const loadingScreen = document.getElementById('ad-loading-screen');
-    if (adTimedOut) {
-      // Reset the loading screen state for next time
-      const spinner = loadingScreen?.querySelector('.loader-spinner');
-      const msgEl = loadingScreen?.querySelector('#ad-loading-messages');
-      if (spinner) spinner.style.display = '';
-      if (msgEl)
-        msgEl.innerHTML = `<p data-i18n="ad_support_message">${t('ad_support_message')}</p>`;
-    }
-    loadingScreen?.classList.add('hidden');
-    if (btn) {
-      btn.innerHTML = originalText;
-      btn.style.opacity = '1';
-      btn.style.pointerEvents = 'auto';
-      btn.disabled = false;
+    // If they were trying to start a level, bring them back to the pre-start screen
+    if (window._pendingLevelIndex !== undefined) {
+      showLevelPreStartScreen(window._pendingLevelIndex);
+      window._pendingLevelIndex = undefined;
     }
   }
 }
@@ -1099,39 +728,6 @@ async function showRewardedAd(type = 'revive', data = null) {
 document.getElementById('get-xp-ad-btn')?.addEventListener('click', () => {
   showRewardedAd('get_xp');
 });
-
-async function showBannerAd() {
-  if (isAdLoading) return;
-  try {
-    const consentInfo = await AdMob.requestConsentInfo();
-    if (consentInfo.status !== 'OBTAINED' && consentInfo.status !== 'NOT_REQUIRED') {
-      return;
-    }
-
-    // Safety check to prevent double banner
-    if (isBannerCreated) return;
-
-    await AdMob.showBanner({
-      adId: BANNER_ID,
-      adSize: BannerAdSize.ADAPTIVE_BANNER,
-      position: BannerAdPosition.BOTTOM_CENTER,
-      margin: 0,
-      width: Math.round(window.screen.width),
-      isTesting: false,
-      tagForChildDirectedTreatment: true,
-      maxAdContentRating: 'G',
-    });
-    isBannerCreated = true;
-    // Estimate adaptive banner height (overridden by bannerAdLoaded event with real value)
-    const estimatedBannerH = Math.min(90, Math.max(50, Math.floor(window.innerWidth * 0.15)));
-    document.documentElement.style.setProperty('--banner-height', `${estimatedBannerH}px`);
-    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, {
-      [analyticsManager.Params.AD_TYPE]: 'banner',
-    });
-  } catch (e) {
-    console.warn('AdMob Banner error (non-fatal):', e);
-  }
-}
 
 function applyReviveReward(isPity = false) {
   // Hide Game Over
