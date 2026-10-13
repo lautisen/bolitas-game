@@ -1,5 +1,10 @@
 # Gloop
 
+[![CI](https://github.com/lautisen/bolitas-game/actions/workflows/ci.yml/badge.svg)](https://github.com/lautisen/bolitas-game/actions/workflows/ci.yml)
+[![Deploy](https://github.com/lautisen/bolitas-game/actions/workflows/deploy.yml/badge.svg)](https://github.com/lautisen/bolitas-game/actions/workflows/deploy.yml)
+
+**[Play in the browser](https://lautisen.github.io/bolitas-game/)** · **[Get it on Google Play](https://play.google.com/store/apps/details?id=com.dreaminraw.bolitas)**
+
 A cross-platform mobile puzzle game built with vanilla JavaScript, Vite and Capacitor, released on Android and playable on the web.
 
 Tap groups of three or more same-coloured blobs to pop them. Gravity pulls the remaining blobs down, empty columns collapse sideways, and every level asks you to hit a score target before you run out of moves. Progression is endless: levels are generated procedurally across ten themed biomes, with difficulty rising in waves and a boss level at the end of each block of fifteen.
@@ -22,10 +27,11 @@ Tap groups of three or more same-coloured blobs to pop them. Gravity pulls the r
 | :--- | :--- |
 | Game and UI | Vanilla JavaScript (ES modules), HTML, CSS. No UI framework. |
 | Build | Vite 7, javascript-obfuscator for production builds |
+| Testing | Vitest with jsdom |
 | Mobile | Capacitor 8 (Android, iOS project scaffolded) |
 | Backend services | Firebase Analytics, Crashlytics, Remote Config |
 | Ads | AdMob via `@capacitor-community/admob` |
-| CI/CD | GitHub Actions builds and deploys the web version to GitHub Pages |
+| CI/CD | GitHub Actions runs the tests on every push and pull request, then builds and deploys the web version to GitHub Pages |
 
 ## Project structure
 
@@ -49,11 +55,20 @@ Requires Node.js 20 or newer.
 ```bash
 npm install
 npm run dev      # start the Vite dev server
+npm test         # run the test suite
 npm run build    # production build in dist/
 npx cap sync     # copy the web build into the native projects
 ```
 
 Open `android/` in Android Studio to build the Android app.
+
+## Tests
+
+The suite in `tests/` covers the parts of the game that are pure logic:
+
+- **Level generation** (`biomes.test.js`): every generated level across 100 biome blocks has a valid grid size, colour count and a score target rounded to 50; the first biome stays gentle; every later biome ends with a boss level; booster tutorial levels are forced easy.
+- **Lives** (`livesManager.test.js`): consumption, timed regeneration with fake timers, the maximum cap and persistence across reloads.
+- **Localization** (`translations.test.js`): all four languages have the same keys and the same `{{placeholders}}` as English, with no empty strings.
 
 ## Documentation
 
