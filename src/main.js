@@ -1,13 +1,41 @@
 import './style.css';
 import analyticsManager from './analyticsManager.js';
-import { getLevelData, getBlockForLevel, generateBiomeBlock, getVisibleBiomeRange, isBiomeRevealed } from './biomes.js';
-import { playSelectSound, playPopSound, playErrorSound, playGameOverSound, playWinSound, playCoinSound, playLevelUnlockSound } from './audio.js';
+import {
+  getLevelData,
+  getBlockForLevel,
+  generateBiomeBlock,
+  getVisibleBiomeRange,
+  isBiomeRevealed,
+} from './biomes.js';
+import {
+  playSelectSound,
+  playPopSound,
+  playErrorSound,
+  playGameOverSound,
+  playWinSound,
+  playCoinSound,
+  playLevelUnlockSound,
+} from './audio.js';
 import { checkAppVersion } from './versionCheck.js';
 import {
-  MIN_GROUP, getGroup, pickSpawnColor, findValidGroups, findValidGroup, hasValidMove,
-  isBoardClear, applyGravity, collapseEmptyColumns,
+  MIN_GROUP,
+  getGroup,
+  pickSpawnColor,
+  findValidGroups,
+  findValidGroup,
+  hasValidMove,
+  isBoardClear,
+  applyGravity,
+  collapseEmptyColumns,
 } from './board.js';
-import { COMBO_MULTIPLIERS, COMBO_WINDOW_MS, calculatePoints, nextComboLevel, getStarCount, getStarProgress } from './scoring.js';
+import {
+  COMBO_MULTIPLIERS,
+  COMBO_WINDOW_MS,
+  calculatePoints,
+  nextComboLevel,
+  getStarCount,
+  getStarProgress,
+} from './scoring.js';
 import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
@@ -16,28 +44,62 @@ import { FirebaseAnalytics } from '@capacitor-firebase/analytics';
 import { FirebaseCrashlytics } from '@capacitor-firebase/crashlytics';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
-import { initShop, openShop, renderShopItems, updateShopNotifications, registerCoinAdWatched } from './shop.js';
 import {
-  getCoins, addCoins,
-  getXP, getPlayerLevel, getXPForNextLevel, getXPProgress, addXP,
-  getDailyQuests, swapQuest, claimQuest,
-  getWeeklyQuests, claimWeeklyQuest, swapWeeklyQuest,
-  hasClaimableQuests, hasClaimableDailyQuests, hasClaimableWeeklyQuests, getNextDailyReset, getNextWeeklyReset,
+  initShop,
+  openShop,
+  renderShopItems,
+  updateShopNotifications,
+  registerCoinAdWatched,
+} from './shop.js';
+import {
+  getCoins,
+  addCoins,
+  getXP,
+  getPlayerLevel,
+  getXPForNextLevel,
+  getXPProgress,
+  addXP,
+  getDailyQuests,
+  swapQuest,
+  claimQuest,
+  getWeeklyQuests,
+  claimWeeklyQuest,
+  swapWeeklyQuest,
+  hasClaimableQuests,
+  hasClaimableDailyQuests,
+  hasClaimableWeeklyQuests,
+  getNextDailyReset,
+  getNextWeeklyReset,
   SHOP_BOOSTERS,
-  getBoosterCount, useBooster, addBoosterFree,
+  getBoosterCount,
+  useBooster,
+  addBoosterFree,
   getXPToNextReward,
-  trackPop, trackLevelComplete, trackBoardClear, trackScore,
-  trackSingleGameScore, trackGamePlayed,
+  trackPop,
+  trackLevelComplete,
+  trackBoardClear,
+  trackScore,
+  trackSingleGameScore,
+  trackGamePlayed,
 } from './economy.js';
 import { t, updateLanguageUI, setLanguage, getLanguage } from './translations.js';
-import { getLives, useLife, addLife, getRemainingTime, checkAndRefill, getFullRestoreTime } from './livesManager.js';
 import {
-  isTutorialActive, setTutorialActive, abortActiveTutorial,
-  checkBoosterTutorial, showAdventureTutorial,
-  handleTutorialProgress
+  getLives,
+  useLife,
+  addLife,
+  getRemainingTime,
+  checkAndRefill,
+  getFullRestoreTime,
+} from './livesManager.js';
+import {
+  isTutorialActive,
+  setTutorialActive,
+  abortActiveTutorial,
+  checkBoosterTutorial,
+  showAdventureTutorial,
+  handleTutorialProgress,
 } from './tutorial.js';
 import { initDailySpin } from './dailySpin.js';
-
 
 const bgmAudio = new Audio('./assets/bgm.mp3');
 bgmAudio.loop = true;
@@ -55,7 +117,7 @@ function getCurrentLevelConfig() {
   const globalLevel = currentLevelIndex + 1;
   const data = getLevelData(globalLevel);
   if (!data) {
-    console.error("CRITICAL: No level data found for level", globalLevel);
+    console.error('CRITICAL: No level data found for level', globalLevel);
   }
   return data;
 }
@@ -108,449 +170,459 @@ let hintedElements = [];
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     uiHeaderMode = document.getElementById('header-mode-display');
-  uiGrid = document.getElementById('grid');
-  const gameArea = document.querySelector('.game-area');
-  if (gameArea) {
-    new ResizeObserver(sizeGrid).observe(gameArea);
-  } else {
-    console.warn('[Main] .game-area not found during initialization');
-  }
-
-  // Initialize i18n and UI basics early
-  updateLanguageUI();
-  updateConfirmationHints();
-  updateLangButtons();
-
-  // Hide the native white/logo splash screen as our app's fancy splash is now rendered
-  try {
-    await SplashScreen.hide();
-  } catch (e) {
-    console.warn('SplashScreen hide failed', e);
-  }
-
-  // Initialize Crashlytics
-  FirebaseCrashlytics.setEnabled({ enabled: true }).catch(() => {});
-
-  // Check for updates - Wait for it to complete
-  const isUpdateRequired = await checkAppVersion();
-
-  // Log app open
-  analyticsManager.logCustomEvent(analyticsManager.Events.APP_OPEN);
-
-  if (isUpdateRequired) {
-    console.log('[Main] App update required. Stopping initialization.');
-    return;
-  }
-
-  // Ask for notification permission early, before the user starts playing
-  requestNotificationPermission();
-
-  // Configure Status Bar — let the OS handle text contrast automatically
-  if (Capacitor.isNativePlatform()) {
-    StatusBar.setStyle({ style: Style.Default }).catch(e => console.warn('StatusBar not available', e));
-    StatusBar.setOverlaysWebView({ overlay: false }).catch(e => console.warn('StatusBar not available', e));
-  }
-
-  // UI Handlers
-
-  document.getElementById('pass-level-btn').addEventListener('click', () => {
-    document.getElementById('pass-level-btn').classList.add('hidden');
-    handleLevelComplete();
-  });
-  document.getElementById('play-again-btn').addEventListener('click', () => {
-    const btn = document.getElementById('play-again-btn');
-    if (btn.dataset.action === 'retry') {
-      // The life was already consumed when the loss happened (showGameOver)
-      analyticsManager.logCustomEvent(analyticsManager.Events.LEVEL_RETRY, {
-        [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
-      });
-      document.getElementById('game-over').classList.add('hidden');
-      showLevelPreStartScreen(currentLevelIndex);
-    } else if (btn.dataset.action === 'next') {
-      initGame();
+    uiGrid = document.getElementById('grid');
+    const gameArea = document.querySelector('.game-area');
+    if (gameArea) {
+      new ResizeObserver(sizeGrid).observe(gameArea);
     } else {
-      returnToMainMenu();
+      console.warn('[Main] .game-area not found during initialization');
     }
-  });
-  document.getElementById('reward-continue-btn').addEventListener('click', () => {
-    const screen = document.getElementById('reward-ready-screen');
-    const shouldRevive = screen.dataset.revive === 'true';
-    screen.dataset.revive = 'false';
-    screen.classList.add('hidden');
-    if (shouldRevive) initGame(true);
-  });
 
-  // Language button listeners
-  document.querySelectorAll('.lang-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const lang = btn.dataset.lang;
-      setLanguage(lang);
-      analyticsManager.setUserProperty('language', lang);
-      updateLangButtons();
-      // Re-render dynamic elements if needed
-      if (!document.getElementById('quests-screen').classList.contains('hidden')) renderQuests();
-      if (!document.getElementById('shop-screen').classList.contains('hidden')) {
-        const activeTab = document.querySelector('.shop-tab.active');
-        renderShopItems(activeTab ? activeTab.dataset.tab : 'boosters');
-      }
-      if (!document.getElementById('biome-map-screen').classList.contains('hidden')) showLevelSelect();
-      
-      // Update gameplay difficulty tag if playing
-      const diffEl = document.getElementById('header-difficulty-tag');
-      if (diffEl && !diffEl.classList.contains('hidden')) {
-        const levelData = getCurrentLevelConfig();
-        if (levelData) diffEl.innerText = t(`diff_${levelData.difficulty}`);
-      }
-      
-      updateConfirmationHints();
-    });
-  });
+    // Initialize i18n and UI basics early
+    updateLanguageUI();
+    updateConfirmationHints();
+    updateLangButtons();
 
-  function updateLangButtons() {
-    const current = getLanguage();
-    document.querySelectorAll('.lang-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.lang === current);
-    });
-  }
-
-  document.getElementById('login-btn').addEventListener('click', handleLogin);
-  // User Settings overlay handlers
-  document.getElementById('close-user-settings-btn').addEventListener('click', () => {
-    document.getElementById('user-settings-screen').classList.add('hidden');
-  });
-  document.getElementById('user-settings-rename-btn').addEventListener('click', () => {
-    document.getElementById('user-settings-screen').classList.add('hidden');
-    changeName();
-  });
-  document.getElementById('back-to-menu-btn').addEventListener('click', () => {
-    if (isTutorialActive()) return; // Block during tutorial
-    abandonLevel();
-  });
-  const onShopClick = () => {
-    if (isTutorialActive()) return;
-    const isMapScreen = !document.getElementById('biome-map-screen').classList.contains('hidden');
-    const isGameOver = !document.getElementById('game-over').classList.contains('hidden');
-    const isWinScreen = !document.getElementById('win-screen').classList.contains('hidden');
-    
-    // If actively playing a level (not in map, not in game over, not in win screen)
-    if (!isMapScreen && !isGameOver && !isWinScreen) {
-      document.getElementById('shop-confirm-screen').classList.remove('hidden');
-    } else {
-      analyticsManager.logCustomEvent(analyticsManager.Events.SHOP_OPENED, { source: 'header' });
-      openShop();
+    // Hide the native white/logo splash screen as our app's fancy splash is now rendered
+    try {
+      await SplashScreen.hide();
+    } catch (e) {
+      console.warn('SplashScreen hide failed', e);
     }
-  };
 
-  document.getElementById('app-header-shop-btn')?.addEventListener('click', onShopClick);
-  document.getElementById('header-shop-btn').addEventListener('click', onShopClick);
+    // Initialize Crashlytics
+    FirebaseCrashlytics.setEnabled({ enabled: true }).catch(() => {});
 
+    // Check for updates - Wait for it to complete
+    const isUpdateRequired = await checkAppVersion();
 
-  // Shop Quit Level Confirmation Handlers
-  document.getElementById('shop-stay-level-btn').addEventListener('click', () => {
-    document.getElementById('shop-confirm-screen').classList.add('hidden');
-  });
-  document.getElementById('shop-quit-level-btn').addEventListener('click', () => {
-    document.getElementById('shop-confirm-screen').classList.add('hidden');
-    abandonLevel();
-    analyticsManager.logCustomEvent(analyticsManager.Events.SHOP_OPENED, { source: 'quit_level' });
-    openShop();
-  });
-  document.getElementById('celebration-continue-btn').addEventListener('click', () => {
-    document.getElementById('clear-celebration').classList.add('hidden');
-    document.getElementById('confetti-container').innerHTML = '';
-    if (currentMode === 'adventure') {
+    // Log app open
+    analyticsManager.logCustomEvent(analyticsManager.Events.APP_OPEN);
+
+    if (isUpdateRequired) {
+      console.log('[Main] App update required. Stopping initialization.');
+      return;
+    }
+
+    // Ask for notification permission early, before the user starts playing
+    requestNotificationPermission();
+
+    // Configure Status Bar — let the OS handle text contrast automatically
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setStyle({ style: Style.Default }).catch((e) =>
+        console.warn('StatusBar not available', e),
+      );
+      StatusBar.setOverlaysWebView({ overlay: false }).catch((e) =>
+        console.warn('StatusBar not available', e),
+      );
+    }
+
+    // UI Handlers
+
+    document.getElementById('pass-level-btn').addEventListener('click', () => {
+      document.getElementById('pass-level-btn').classList.add('hidden');
       handleLevelComplete();
-    } else {
-      showGameOver(false);
+    });
+    document.getElementById('play-again-btn').addEventListener('click', () => {
+      const btn = document.getElementById('play-again-btn');
+      if (btn.dataset.action === 'retry') {
+        // The life was already consumed when the loss happened (showGameOver)
+        analyticsManager.logCustomEvent(analyticsManager.Events.LEVEL_RETRY, {
+          [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
+        });
+        document.getElementById('game-over').classList.add('hidden');
+        showLevelPreStartScreen(currentLevelIndex);
+      } else if (btn.dataset.action === 'next') {
+        initGame();
+      } else {
+        returnToMainMenu();
+      }
+    });
+    document.getElementById('reward-continue-btn').addEventListener('click', () => {
+      const screen = document.getElementById('reward-ready-screen');
+      const shouldRevive = screen.dataset.revive === 'true';
+      screen.dataset.revive = 'false';
+      screen.classList.add('hidden');
+      if (shouldRevive) initGame(true);
+    });
+
+    // Language button listeners
+    document.querySelectorAll('.lang-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const lang = btn.dataset.lang;
+        setLanguage(lang);
+        analyticsManager.setUserProperty('language', lang);
+        updateLangButtons();
+        // Re-render dynamic elements if needed
+        if (!document.getElementById('quests-screen').classList.contains('hidden')) renderQuests();
+        if (!document.getElementById('shop-screen').classList.contains('hidden')) {
+          const activeTab = document.querySelector('.shop-tab.active');
+          renderShopItems(activeTab ? activeTab.dataset.tab : 'boosters');
+        }
+        if (!document.getElementById('biome-map-screen').classList.contains('hidden'))
+          showLevelSelect();
+
+        // Update gameplay difficulty tag if playing
+        const diffEl = document.getElementById('header-difficulty-tag');
+        if (diffEl && !diffEl.classList.contains('hidden')) {
+          const levelData = getCurrentLevelConfig();
+          if (levelData) diffEl.innerText = t(`diff_${levelData.difficulty}`);
+        }
+
+        updateConfirmationHints();
+      });
+    });
+
+    function updateLangButtons() {
+      const current = getLanguage();
+      document.querySelectorAll('.lang-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.lang === current);
+      });
     }
-  });
-  document.getElementById('exit-settings-btn').addEventListener('click', () => {
-    document.getElementById('settings-screen').classList.add('hidden');
-  });
 
-  // Settings Handlers (header button)
-  document.getElementById('settings-btn').addEventListener('click', () => {
-    if (isTutorialActive()) return; // Block during tutorial
-    document.getElementById('settings-screen').classList.remove('hidden');
-  });
-  document.getElementById('close-settings-btn').addEventListener('click', () => {
-    document.getElementById('settings-screen').classList.add('hidden');
-  });
+    document.getElementById('login-btn').addEventListener('click', handleLogin);
+    // User Settings overlay handlers
+    document.getElementById('close-user-settings-btn').addEventListener('click', () => {
+      document.getElementById('user-settings-screen').classList.add('hidden');
+    });
+    document.getElementById('user-settings-rename-btn').addEventListener('click', () => {
+      document.getElementById('user-settings-screen').classList.add('hidden');
+      changeName();
+    });
+    document.getElementById('back-to-menu-btn').addEventListener('click', () => {
+      if (isTutorialActive()) return; // Block during tutorial
+      abandonLevel();
+    });
+    const onShopClick = () => {
+      if (isTutorialActive()) return;
+      const isMapScreen = !document.getElementById('biome-map-screen').classList.contains('hidden');
+      const isGameOver = !document.getElementById('game-over').classList.contains('hidden');
+      const isWinScreen = !document.getElementById('win-screen').classList.contains('hidden');
 
-  // Tap outside settings to close
-  document.getElementById('settings-screen').addEventListener('click', (e) => {
-    if (e.target.id === 'settings-screen') {
+      // If actively playing a level (not in map, not in game over, not in win screen)
+      if (!isMapScreen && !isGameOver && !isWinScreen) {
+        document.getElementById('shop-confirm-screen').classList.remove('hidden');
+      } else {
+        analyticsManager.logCustomEvent(analyticsManager.Events.SHOP_OPENED, { source: 'header' });
+        openShop();
+      }
+    };
+
+    document.getElementById('app-header-shop-btn')?.addEventListener('click', onShopClick);
+    document.getElementById('header-shop-btn').addEventListener('click', onShopClick);
+
+    // Shop Quit Level Confirmation Handlers
+    document.getElementById('shop-stay-level-btn').addEventListener('click', () => {
+      document.getElementById('shop-confirm-screen').classList.add('hidden');
+    });
+    document.getElementById('shop-quit-level-btn').addEventListener('click', () => {
+      document.getElementById('shop-confirm-screen').classList.add('hidden');
+      abandonLevel();
+      analyticsManager.logCustomEvent(analyticsManager.Events.SHOP_OPENED, {
+        source: 'quit_level',
+      });
+      openShop();
+    });
+    document.getElementById('celebration-continue-btn').addEventListener('click', () => {
+      document.getElementById('clear-celebration').classList.add('hidden');
+      document.getElementById('confetti-container').innerHTML = '';
+      if (currentMode === 'adventure') {
+        handleLevelComplete();
+      } else {
+        showGameOver(false);
+      }
+    });
+    document.getElementById('exit-settings-btn').addEventListener('click', () => {
       document.getElementById('settings-screen').classList.add('hidden');
-    }
-  });
+    });
 
-  // Overlay settings/leaderboard buttons (multiple across screens)
-  document.querySelectorAll('.overlay-settings-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    // Settings Handlers (header button)
+    document.getElementById('settings-btn').addEventListener('click', () => {
+      if (isTutorialActive()) return; // Block during tutorial
       document.getElementById('settings-screen').classList.remove('hidden');
     });
-  });
-  document.querySelectorAll('.overlay-shop-btn').forEach(btn => {
-    btn.addEventListener('click', onShopClick);
-  });
-
-  const prestartScreen = document.getElementById('level-prestart-screen');
-  document.getElementById('prestart-close-btn').addEventListener('click', () => {
-    prestartScreen.classList.add('hidden');
-  });
-  document.getElementById('prestart-ad-buff-btn').addEventListener('click', () => {
-    if (prestartAdsThisTry >= 2) {
-      const btn = document.getElementById('prestart-ad-buff-btn');
-      const originalText = btn.innerText;
-      btn.innerText = t('limit_reached', { cur: 2, max: 2 });
-      if (isAudioEnabled) playErrorSound();
-      setTimeout(() => btn.innerText = originalText, 2000);
-      return;
-    }
-    // The counter increments in the onRewarded handler, once the reward is actually earned
-    showRewardedAd('prestart_buff');
-  });
-
-  // Level selector listeners (these create the modal on pass level / retries)
-  // `initGame` naturally progresses without map intervention unless menu is hit.
- 
-  // Initialize settings UI
-  document.getElementById('audio-toggle').checked = isAudioEnabled;
-  document.getElementById('colorblind-toggle').checked = isColorblindEnabled;
-  if (isColorblindEnabled) document.body.classList.add('color-blind-mode');
-
-  document.getElementById('audio-toggle').addEventListener('change', (e) => {
-    isAudioEnabled = e.target.checked;
-    localStorage.setItem('bolitasAudioEnabled', isAudioEnabled);
-    if (isAudioEnabled) {
-      if (currentMode && document.getElementById('login-screen').classList.contains('hidden')) {
-        bgmAudio.play().catch(() => console.log('Autoplay prevented'));
-      }
-    } else {
-      bgmAudio.pause();
-    }
-  });
-  document.getElementById('colorblind-toggle').addEventListener('change', (e) => {
-    isColorblindEnabled = e.target.checked;
-    localStorage.setItem('bolitasColorblindEnabled', isColorblindEnabled);
-    if (isColorblindEnabled) {
-      document.body.classList.add('color-blind-mode');
-    } else {
-      document.body.classList.remove('color-blind-mode');
-    }
-
-    // Refresh shop UI if open
-    if (!document.getElementById('shop-screen').classList.contains('hidden')) {
-      renderShopItems('boosters');
-    }
-  });
-
-  // Force dark mode (always on)
-  document.body.classList.add('dark-theme');
-
-  // Exit Confirmation Screen Handlers
-  document.getElementById('exit-save-close-btn').addEventListener('click', () => {
-    // Assuming economy state is already auto-saved by most actions,
-    // we just ensure a final exit call.
-    App.exitApp();
-  });
-  document.getElementById('exit-stay-btn').addEventListener('click', () => {
-    document.getElementById('exit-confirm-screen').classList.add('hidden');
-  });
-
-  function updateConfirmationHints() {
-    const params = {
-      go_icon: '✅',
-      go_text: t('shop_go'),
-      stay_icon: '❌',
-      stay_text: t('shop_stay')
-    };
-    const hintText = t('shop_hint', params);
-    
-    const shopHint = document.getElementById('shop-confirm-hint');
-    if (shopHint) shopHint.innerText = hintText;
-  }
-
-  // Android Back Button Logic
-  let lastBackPress = 0;
-  App.addListener('backButton', () => {
-    const now = Date.now();
-
-    // Check if any overlay is open and prioritize closing it
-    const activeOverlays = Array.from(document.querySelectorAll('.overlay:not(.hidden)'));
-    if (activeOverlays.length > 0) {
-      // If the exit confirm screen is already open, just stay (or close the modal)
-      if (!document.getElementById('exit-confirm-screen').classList.contains('hidden')) {
-        document.getElementById('exit-confirm-screen').classList.add('hidden');
-        return;
-      }
-      // Top-most = highest real z-index, not last in DOM order
-      const topOverlay = activeOverlays.sort((a, b) =>
-        (parseInt(getComputedStyle(b).zIndex) || 0) - (parseInt(getComputedStyle(a).zIndex) || 0)
-      )[0];
-      // Game-over and win-screen sit on top of the game grid — closing them would
-      // reveal a non-interactive completed/lost level. Go to map instead.
-      if (topOverlay.id === 'game-over') {
-        // Life already consumed at loss time — just leave
-        returnToMainMenu();
-        return;
-      }
-      if (topOverlay.id === 'win-screen') {
-        returnToMainMenu();
-        return;
-      }
-      // Otherwise, close the top-most overlay (basic stack logic)
-      topOverlay.classList.add('hidden');
-      // Shop and quests hide the biome map when opened — restore it on back
-      if (topOverlay.id === 'shop-screen' || topOverlay.id === 'quests-screen') {
-        document.getElementById('biome-map-screen').classList.remove('hidden');
-        syncFooterTabs('map');
-        scrollToCurrentBiome();
-      }
-      return;
-    }
-
-    // Double tap within 2 seconds to show the exit confirm screen
-    if (now - lastBackPress < 2000) {
-      document.getElementById('exit-confirm-screen').classList.remove('hidden');
-      lastBackPress = 0; // Reset
-    } else {
-      lastBackPress = now;
-      // Optional: show a small toast or message say "Press again to exit"
-      // console.log('Press back again to exit');
-    }
-  });
-
-
-
-  // Footer tab listeners
-  document.getElementById('footer-tab-map').addEventListener('click', () => {
-    document.getElementById('quests-screen').classList.add('hidden');
-    document.getElementById('shop-screen').classList.add('hidden');
-    document.getElementById('biome-map-screen').classList.remove('hidden');
-    syncFooterTabs('map');
-    scrollToCurrentBiome();
-  });
-
-  document.getElementById('footer-tab-quests').addEventListener('click', () => {
-    openQuests();
-  });
-
-  document.getElementById('footer-tab-shop').addEventListener('click', () => {
-    analyticsManager.logCustomEvent(analyticsManager.Events.SHOP_OPENED, { source: 'footer' });
-    openShop();
-  });
-
-
-
-  document.getElementById('revive-btn').addEventListener('click', () => showRewardedAd());
-  const pityBtn = document.getElementById('pity-revive-btn');
-  if (pityBtn) {
-    pityBtn.addEventListener('click', () => showPityRewardAd());
-  }
-
-  document.getElementById('out-of-lives-watch-ad-btn').addEventListener('click', () => showRewardedAd('get_life'));
-  document.getElementById('out-of-lives-close-btn').addEventListener('click', () => {
-    window._pendingLevelIndex = undefined;
-    document.getElementById('out-of-lives-screen').classList.add('hidden');
-    returnToMainMenu();
-  });
-  document.getElementById('header-lives-map').addEventListener('click', () => {
-    window._pendingLevelIndex = undefined; // Not starting a level from here
-    const titleEl = document.getElementById('out-of-lives-title');
-    if (titleEl) titleEl.innerText = getLives() <= 0 ? t('out_of_lives_title') : t('lives_info_title');
-    document.getElementById('out-of-lives-screen').classList.remove('hidden');
-  });
-
-  // x2 Coins rewarded ad button on win screen
-  document.getElementById('win-x2-btn').addEventListener('click', () => {
-    if (window._winCoinsEarned > 0) {
-      showRewardedAd('double_coins', window._winCoinsEarned);
-    }
-  });
-
-  // --- New Economy UI Handlers ---
-
-  
-  // Set the localized hint for shop confirmation
-  const shopHintEl = document.getElementById('shop-confirm-hint');
-  if (shopHintEl) {
-    shopHintEl.innerText = t('shop_hint', {
-      go_icon: '✅',
-      go_text: t('shop_go'),
-      stay_icon: '❌',
-      stay_text: t('shop_stay')
+    document.getElementById('close-settings-btn').addEventListener('click', () => {
+      document.getElementById('settings-screen').classList.add('hidden');
     });
-  }
 
-  // x2 Coins rewarded ad button on win screen
-  document.getElementById('win-continue-btn').addEventListener('click', async () => {
-    document.getElementById('win-screen').classList.add('hidden');
-    
-    // Centralized interstitial policy:
-    // Show every 10 levels OR if 7 minutes passed
-    const globalLevel = (parseInt(localStorage.getItem('bolitasLevel')) || 0) + 1;
-    const now = Date.now();
-    const timeDiff = now - lastAdTimestamp;
-    
-    const shouldByLevel = globalLevel >= 10 && globalLevel % 10 === 0;
-    const shouldByTime = timeDiff > 420000;
+    // Tap outside settings to close
+    document.getElementById('settings-screen').addEventListener('click', (e) => {
+      if (e.target.id === 'settings-screen') {
+        document.getElementById('settings-screen').classList.add('hidden');
+      }
+    });
 
-    if (shouldByLevel || shouldByTime) {
-      console.log(`Ad triggered by ${shouldByLevel ? 'level' : 'time'}. Showing interstitial.`);
-      await showInterstitialAd();
+    // Overlay settings/leaderboard buttons (multiple across screens)
+    document.querySelectorAll('.overlay-settings-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.getElementById('settings-screen').classList.remove('hidden');
+      });
+    });
+    document.querySelectorAll('.overlay-shop-btn').forEach((btn) => {
+      btn.addEventListener('click', onShopClick);
+    });
+
+    const prestartScreen = document.getElementById('level-prestart-screen');
+    document.getElementById('prestart-close-btn').addEventListener('click', () => {
+      prestartScreen.classList.add('hidden');
+    });
+    document.getElementById('prestart-ad-buff-btn').addEventListener('click', () => {
+      if (prestartAdsThisTry >= 2) {
+        const btn = document.getElementById('prestart-ad-buff-btn');
+        const originalText = btn.innerText;
+        btn.innerText = t('limit_reached', { cur: 2, max: 2 });
+        if (isAudioEnabled) playErrorSound();
+        setTimeout(() => (btn.innerText = originalText), 2000);
+        return;
+      }
+      // The counter increments in the onRewarded handler, once the reward is actually earned
+      showRewardedAd('prestart_buff');
+    });
+
+    // Level selector listeners (these create the modal on pass level / retries)
+    // `initGame` naturally progresses without map intervention unless menu is hit.
+
+    // Initialize settings UI
+    document.getElementById('audio-toggle').checked = isAudioEnabled;
+    document.getElementById('colorblind-toggle').checked = isColorblindEnabled;
+    if (isColorblindEnabled) document.body.classList.add('color-blind-mode');
+
+    document.getElementById('audio-toggle').addEventListener('change', (e) => {
+      isAudioEnabled = e.target.checked;
+      localStorage.setItem('bolitasAudioEnabled', isAudioEnabled);
+      if (isAudioEnabled) {
+        if (currentMode && document.getElementById('login-screen').classList.contains('hidden')) {
+          bgmAudio.play().catch(() => console.log('Autoplay prevented'));
+        }
+      } else {
+        bgmAudio.pause();
+      }
+    });
+    document.getElementById('colorblind-toggle').addEventListener('change', (e) => {
+      isColorblindEnabled = e.target.checked;
+      localStorage.setItem('bolitasColorblindEnabled', isColorblindEnabled);
+      if (isColorblindEnabled) {
+        document.body.classList.add('color-blind-mode');
+      } else {
+        document.body.classList.remove('color-blind-mode');
+      }
+
+      // Refresh shop UI if open
+      if (!document.getElementById('shop-screen').classList.contains('hidden')) {
+        renderShopItems('boosters');
+      }
+    });
+
+    // Force dark mode (always on)
+    document.body.classList.add('dark-theme');
+
+    // Exit Confirmation Screen Handlers
+    document.getElementById('exit-save-close-btn').addEventListener('click', () => {
+      // Assuming economy state is already auto-saved by most actions,
+      // we just ensure a final exit call.
+      App.exitApp();
+    });
+    document.getElementById('exit-stay-btn').addEventListener('click', () => {
+      document.getElementById('exit-confirm-screen').classList.add('hidden');
+    });
+
+    function updateConfirmationHints() {
+      const params = {
+        go_icon: '✅',
+        go_text: t('shop_go'),
+        stay_icon: '❌',
+        stay_text: t('shop_stay'),
+      };
+      const hintText = t('shop_hint', params);
+
+      const shopHint = document.getElementById('shop-confirm-hint');
+      if (shopHint) shopHint.innerText = hintText;
     }
 
-    // Go back to level select — only animate unlock if this was a first-time completion
-    const justUnlocked = window._justUnlockedLevel ?? null;
-    window._justUnlockedLevel = null; // consume so replays never re-trigger
-    showLevelSelect(justUnlocked);
-  });
-  // Init shop module
-  initShop({ updateHeaderCoins, showRewardedAd });
-  initDailySpin({ onCoinsUpdate: updateHeaderCoins, showRewardedAd });
+    // Android Back Button Logic
+    let lastBackPress = 0;
+    App.addListener('backButton', () => {
+      const now = Date.now();
 
-  // Powerup buttons
-  document.querySelectorAll('.powerup-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      handlePowerupClick(btn.dataset.booster);
+      // Check if any overlay is open and prioritize closing it
+      const activeOverlays = Array.from(document.querySelectorAll('.overlay:not(.hidden)'));
+      if (activeOverlays.length > 0) {
+        // If the exit confirm screen is already open, just stay (or close the modal)
+        if (!document.getElementById('exit-confirm-screen').classList.contains('hidden')) {
+          document.getElementById('exit-confirm-screen').classList.add('hidden');
+          return;
+        }
+        // Top-most = highest real z-index, not last in DOM order
+        const topOverlay = activeOverlays.sort(
+          (a, b) =>
+            (parseInt(getComputedStyle(b).zIndex) || 0) -
+            (parseInt(getComputedStyle(a).zIndex) || 0),
+        )[0];
+        // Game-over and win-screen sit on top of the game grid — closing them would
+        // reveal a non-interactive completed/lost level. Go to map instead.
+        if (topOverlay.id === 'game-over') {
+          // Life already consumed at loss time — just leave
+          returnToMainMenu();
+          return;
+        }
+        if (topOverlay.id === 'win-screen') {
+          returnToMainMenu();
+          return;
+        }
+        // Otherwise, close the top-most overlay (basic stack logic)
+        topOverlay.classList.add('hidden');
+        // Shop and quests hide the biome map when opened — restore it on back
+        if (topOverlay.id === 'shop-screen' || topOverlay.id === 'quests-screen') {
+          document.getElementById('biome-map-screen').classList.remove('hidden');
+          syncFooterTabs('map');
+          scrollToCurrentBiome();
+        }
+        return;
+      }
+
+      // Double tap within 2 seconds to show the exit confirm screen
+      if (now - lastBackPress < 2000) {
+        document.getElementById('exit-confirm-screen').classList.remove('hidden');
+        lastBackPress = 0; // Reset
+      } else {
+        lastBackPress = now;
+        // Optional: show a small toast or message say "Press again to exit"
+        // console.log('Press back again to exit');
+      }
     });
-  });
 
-  // Update header coins
-  updateHeaderCoins();
-  renderActiveStreakBadge();
+    // Footer tab listeners
+    document.getElementById('footer-tab-map').addEventListener('click', () => {
+      document.getElementById('quests-screen').classList.add('hidden');
+      document.getElementById('shop-screen').classList.add('hidden');
+      document.getElementById('biome-map-screen').classList.remove('hidden');
+      syncFooterTabs('map');
+      scrollToCurrentBiome();
+    });
 
-  // Lives system: restore any pending lives and keep UI in sync
-  checkAndRefill();
-  updateLivesUI();
-  setInterval(() => { checkAndRefill(); updateLivesUI(); }, 1000);
+    document.getElementById('footer-tab-quests').addEventListener('click', () => {
+      openQuests();
+    });
 
-  checkExistingSession();
-  // AdMob is native-only: its web stub always reports consent as REQUIRED,
-  // which would lock the web build behind the consent screen
-  if (Capacitor.isNativePlatform()) {
-    initAdMob().then(() => {
-      // Show banner after a small delay to ensure native view is ready
-      setTimeout(() => {
-        showBannerAd().catch(e => console.warn("Banner delayed init failed", e));
-      }, 2000);
-    }).catch(e => console.error("initAdMob failed:", e));
-  }
+    document.getElementById('footer-tab-shop').addEventListener('click', () => {
+      analyticsManager.logCustomEvent(analyticsManager.Events.SHOP_OPENED, { source: 'footer' });
+      openShop();
+    });
 
-  // Consent Required Screen Handlers
-  document.getElementById('retry-consent-btn').addEventListener('click', async () => {
-    await AdMob.showConsentForm();
-    await handleConsentFlow();
-  });
-  document.getElementById('exit-app-btn').addEventListener('click', () => {
-    App.exitApp();
-  });
+    document.getElementById('revive-btn').addEventListener('click', () => showRewardedAd());
+    const pityBtn = document.getElementById('pity-revive-btn');
+    if (pityBtn) {
+      pityBtn.addEventListener('click', () => showPityRewardAd());
+    }
+
+    document
+      .getElementById('out-of-lives-watch-ad-btn')
+      .addEventListener('click', () => showRewardedAd('get_life'));
+    document.getElementById('out-of-lives-close-btn').addEventListener('click', () => {
+      window._pendingLevelIndex = undefined;
+      document.getElementById('out-of-lives-screen').classList.add('hidden');
+      returnToMainMenu();
+    });
+    document.getElementById('header-lives-map').addEventListener('click', () => {
+      window._pendingLevelIndex = undefined; // Not starting a level from here
+      const titleEl = document.getElementById('out-of-lives-title');
+      if (titleEl)
+        titleEl.innerText = getLives() <= 0 ? t('out_of_lives_title') : t('lives_info_title');
+      document.getElementById('out-of-lives-screen').classList.remove('hidden');
+    });
+
+    // x2 Coins rewarded ad button on win screen
+    document.getElementById('win-x2-btn').addEventListener('click', () => {
+      if (window._winCoinsEarned > 0) {
+        showRewardedAd('double_coins', window._winCoinsEarned);
+      }
+    });
+
+    // --- New Economy UI Handlers ---
+
+    // Set the localized hint for shop confirmation
+    const shopHintEl = document.getElementById('shop-confirm-hint');
+    if (shopHintEl) {
+      shopHintEl.innerText = t('shop_hint', {
+        go_icon: '✅',
+        go_text: t('shop_go'),
+        stay_icon: '❌',
+        stay_text: t('shop_stay'),
+      });
+    }
+
+    // x2 Coins rewarded ad button on win screen
+    document.getElementById('win-continue-btn').addEventListener('click', async () => {
+      document.getElementById('win-screen').classList.add('hidden');
+
+      // Centralized interstitial policy:
+      // Show every 10 levels OR if 7 minutes passed
+      const globalLevel = (parseInt(localStorage.getItem('bolitasLevel')) || 0) + 1;
+      const now = Date.now();
+      const timeDiff = now - lastAdTimestamp;
+
+      const shouldByLevel = globalLevel >= 10 && globalLevel % 10 === 0;
+      const shouldByTime = timeDiff > 420000;
+
+      if (shouldByLevel || shouldByTime) {
+        console.log(`Ad triggered by ${shouldByLevel ? 'level' : 'time'}. Showing interstitial.`);
+        await showInterstitialAd();
+      }
+
+      // Go back to level select — only animate unlock if this was a first-time completion
+      const justUnlocked = window._justUnlockedLevel ?? null;
+      window._justUnlockedLevel = null; // consume so replays never re-trigger
+      showLevelSelect(justUnlocked);
+    });
+    // Init shop module
+    initShop({ updateHeaderCoins, showRewardedAd });
+    initDailySpin({ onCoinsUpdate: updateHeaderCoins, showRewardedAd });
+
+    // Powerup buttons
+    document.querySelectorAll('.powerup-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        handlePowerupClick(btn.dataset.booster);
+      });
+    });
+
+    // Update header coins
+    updateHeaderCoins();
+    renderActiveStreakBadge();
+
+    // Lives system: restore any pending lives and keep UI in sync
+    checkAndRefill();
+    updateLivesUI();
+    setInterval(() => {
+      checkAndRefill();
+      updateLivesUI();
+    }, 1000);
+
+    checkExistingSession();
+    // AdMob is native-only: its web stub always reports consent as REQUIRED,
+    // which would lock the web build behind the consent screen
+    if (Capacitor.isNativePlatform()) {
+      initAdMob()
+        .then(() => {
+          // Show banner after a small delay to ensure native view is ready
+          setTimeout(() => {
+            showBannerAd().catch((e) => console.warn('Banner delayed init failed', e));
+          }, 2000);
+        })
+        .catch((e) => console.error('initAdMob failed:', e));
+    }
+
+    // Consent Required Screen Handlers
+    document.getElementById('retry-consent-btn').addEventListener('click', async () => {
+      await AdMob.showConsentForm();
+      await handleConsentFlow();
+    });
+    document.getElementById('exit-app-btn').addEventListener('click', () => {
+      App.exitApp();
+    });
     // End of initialization: hide splash screen after a short delay
-    setTimeout(hideSplashScreen, 3000); 
-
+    setTimeout(hideSplashScreen, 3000);
   } catch (err) {
-    console.error("CRITICAL: App initialization failed:", err);
+    console.error('CRITICAL: App initialization failed:', err);
     hideSplashScreen(); // Ensure it disappears even on error
   }
 });
@@ -592,13 +664,14 @@ async function handleConsentFlow() {
     // If we reach here, consent is OBTAINED or NOT_REQUIRED
     document.getElementById('consent-required-screen').classList.add('hidden');
 
-    const isConsentObtained = finalInfo.status === 'OBTAINED' || finalInfo.status === 'NOT_REQUIRED';
+    const isConsentObtained =
+      finalInfo.status === 'OBTAINED' || finalInfo.status === 'NOT_REQUIRED';
     await FirebaseAnalytics.setEnabled({ enabled: isConsentObtained });
 
     if (isConsentObtained) {
       // Pre-load ads
       prepareInterstitial();
-      prepareRewarded('revive');      // Preload default revive
+      prepareRewarded('revive'); // Preload default revive
       prepareRewarded('shop_coins'); // Preload shop coins
       showBannerAd();
     }
@@ -606,7 +679,7 @@ async function handleConsentFlow() {
     return true;
   } catch (err) {
     console.error('Consent flow error:', err);
-    // If it fails, we might want to fail open or closed depending on policy. 
+    // If it fails, we might want to fail open or closed depending on policy.
     // Here we proceed but log the error.
     return true;
   }
@@ -617,7 +690,7 @@ async function initAdMob() {
     // Initialize AdMob with COPPA compliance settings
     await AdMob.initialize({
       tagForChildDirectedTreatment: true,
-      maxAdContentRating: 'G'
+      maxAdContentRating: 'G',
     });
     console.log('AdMob initialized');
 
@@ -632,10 +705,10 @@ async function initAdMob() {
       const type = _rewardActionType || 'unknown';
       const data = _rewardActionData;
       console.log('User was rewarded for:', type, rewardItem);
-      
+
       // Log ad reward watched event
       analyticsManager.logCustomEvent('ad_reward_watched', {
-        placement: type
+        placement: type,
       });
 
       if (type === 'swap_quest') {
@@ -659,7 +732,7 @@ async function initAdMob() {
           window._winCoinsEarned = (window._winCoinsEarned || 0) + extraCoins;
           document.getElementById('win-coins').innerText = `+${window._winCoinsEarned}`;
           updateHeaderCoins();
-          
+
           if (isAudioEnabled) playCoinSound();
           const headerCoins = document.getElementById('header-coin-count');
           headerCoins.classList.remove('reward-pulse');
@@ -672,15 +745,15 @@ async function initAdMob() {
         const xpToGain = getXPForNextLevel();
         const res = addXP(xpToGain);
         updateMenuPlayerLevel();
-        
+
         // Show confirmation
         const textEl = document.getElementById('reward-ready-text');
         textEl.innerHTML = `${t('bonus_xp_earned')}<br>✨ +${xpToGain} XP`;
         document.getElementById('reward-ready-screen').classList.remove('hidden');
-        
-        analyticsManager.logCustomEvent(analyticsManager.Events.XP_REWARD_CLAIMED, { 
-          amount: xpToGain, 
-          level: res.newLevel 
+
+        analyticsManager.logCustomEvent(analyticsManager.Events.XP_REWARD_CLAIMED, {
+          amount: xpToGain,
+          level: res.newLevel,
         });
         analyticsManager.setUserProperty('player_level', res.newLevel);
       } else if (type === 'pity_revive') {
@@ -693,21 +766,21 @@ async function initAdMob() {
         updateHeaderCoins();
         const shopCoinEl = document.getElementById('shop-coin-count');
         if (shopCoinEl) shopCoinEl.innerText = getCoins();
-        
+
         if (isAudioEnabled) playCoinSound();
         const textEl = document.getElementById('reward-ready-text');
         textEl.innerHTML = `🪙 +${rewardAmount}`;
         document.getElementById('reward-ready-screen').classList.remove('hidden');
-        
-        analyticsManager.logCustomEvent(analyticsManager.Events.COIN_REWARD_CLAIMED, { 
-          amount: rewardAmount 
+
+        analyticsManager.logCustomEvent(analyticsManager.Events.COIN_REWARD_CLAIMED, {
+          amount: rewardAmount,
         });
         analyticsManager.setUserProperty('total_coins', getCoins());
       } else if (type === 'prestart_buff') {
         // Count against the 2-per-try limit only when the reward was actually earned
         prestartAdsThisTry++;
         // Grant a random unlocked booster (not shuffle, preferring more impactful ones)
-        const buffBoosters = SHOP_BOOSTERS.filter(b => b.id !== 'shuffle');
+        const buffBoosters = SHOP_BOOSTERS.filter((b) => b.id !== 'shuffle');
         const chosen = buffBoosters[Math.floor(Math.random() * buffBoosters.length)];
         addBoosterFree(chosen.id, 1);
         if (isAudioEnabled) playCoinSound();
@@ -715,9 +788,9 @@ async function initAdMob() {
         const boosterName = t(`booster_${chosen.id}_name`);
         textEl.innerHTML = `${chosen.icon} +1 ${boosterName}!`;
         document.getElementById('reward-ready-screen').classList.remove('hidden');
-        
-        analyticsManager.logCustomEvent(analyticsManager.Events.PRESTART_BUFF_CLAIMED, { 
-          booster: chosen.id 
+
+        analyticsManager.logCustomEvent(analyticsManager.Events.PRESTART_BUFF_CLAIMED, {
+          booster: chosen.id,
         });
       } else if (type === 'revive') {
         applyReviveReward();
@@ -726,7 +799,7 @@ async function initAdMob() {
         updateLivesUI();
         scheduleLivesNotification();
         document.getElementById('out-of-lives-screen').classList.add('hidden');
-        
+
         // If they were trying to start a level, bring them back to the pre-start screen
         if (window._pendingLevelIndex !== undefined) {
           showLevelPreStartScreen(window._pendingLevelIndex);
@@ -751,15 +824,21 @@ async function initAdMob() {
 
     // Try both naming conventions for robustness across versions
     const events = [
-      'interstitialAdDismissed', 'onInterstitialAdDismissed',
-      'interstitialAdFailedToLoad', 'onInterstitialAdFailedToLoad',
-      'interstitialAdFailedToShow', 'onInterstitialAdFailedToShow',
-      'rewardVideoAdDismissed', 'onRewardedVideoAdDismissed',
-      'rewardVideoAdFailedToLoad', 'onRewardedVideoAdFailedToLoad',
-      'rewardVideoAdFailedToShow', 'onRewardedVideoAdFailedToShow'
+      'interstitialAdDismissed',
+      'onInterstitialAdDismissed',
+      'interstitialAdFailedToLoad',
+      'onInterstitialAdFailedToLoad',
+      'interstitialAdFailedToShow',
+      'onInterstitialAdFailedToShow',
+      'rewardVideoAdDismissed',
+      'onRewardedVideoAdDismissed',
+      'rewardVideoAdFailedToLoad',
+      'onRewardedVideoAdFailedToLoad',
+      'rewardVideoAdFailedToShow',
+      'onRewardedVideoAdFailedToShow',
     ];
 
-    events.forEach(eventName => {
+    events.forEach((eventName) => {
       AdMob.addListener(eventName, (info) => {
         console.log(`[AdMob] Event: ${eventName}`, info);
         hideLoading();
@@ -780,9 +859,11 @@ async function initAdMob() {
       console.warn('[AdMob] Reward ad failed to load:', info);
       analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
         [analyticsManager.Params.AD_TYPE]: 'rewarded',
-        error_code: info?.errorCode ?? 'unknown'
+        error_code: info?.errorCode ?? 'unknown',
       });
-      FirebaseCrashlytics.recordException({ message: `Ad failed to load: rewarded - ${info?.errorCode}` }).catch(() => {});
+      FirebaseCrashlytics.recordException({
+        message: `Ad failed to load: rewarded - ${info?.errorCode}`,
+      }).catch(() => {});
       setTimeout(() => prepareRewarded('revive'), 15000);
     });
 
@@ -790,20 +871,22 @@ async function initAdMob() {
       console.warn('[AdMob] Reward ad failed to load (legacy):', info);
       analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
         [analyticsManager.Params.AD_TYPE]: 'rewarded_legacy',
-        error_code: info?.errorCode ?? 'unknown'
+        error_code: info?.errorCode ?? 'unknown',
       });
     });
 
     // Update --banner-height to match actual native banner size
     AdMob.addListener('bannerAdLoaded', (size) => {
       if (size && size.height) {
-        document.documentElement.style.setProperty('--banner-height', `${Math.ceil(size.height)}px`);
+        document.documentElement.style.setProperty(
+          '--banner-height',
+          `${Math.ceil(size.height)}px`,
+        );
       }
     });
 
     // Show banner globally as soon as initialized
     showBannerAd();
-
   } catch (err) {
     console.error('AdMob initialization failed', err);
   }
@@ -815,14 +898,14 @@ async function prepareInterstitial() {
       adId: 'ca-app-pub-3539090903954344/2163380169',
       isTesting: false,
       tagForChildDirectedTreatment: true,
-      maxAdContentRating: 'G'
+      maxAdContentRating: 'G',
     };
     await AdMob.prepareInterstitial(options);
   } catch (err) {
     console.error('Prepare Interstitial Error', err);
     analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
       [analyticsManager.Params.AD_TYPE]: 'interstitial',
-      error_code: err?.message ?? 'unknown'
+      error_code: err?.message ?? 'unknown',
     });
   }
 }
@@ -831,7 +914,7 @@ async function prepareInterstitial() {
 window._rewardedAdsReady = {
   revive: false,
   shop_coins: false,
-  pity_revive: false
+  pity_revive: false,
 };
 
 async function prepareRewarded(type = 'revive') {
@@ -844,7 +927,7 @@ async function prepareRewarded(type = 'revive') {
       adId: adId,
       isTesting: false,
       tagForChildDirectedTreatment: true,
-      maxAdContentRating: 'G'
+      maxAdContentRating: 'G',
     };
     await AdMob.prepareRewardVideoAd(options);
     window._rewardedAdsReady[type] = true;
@@ -854,7 +937,7 @@ async function prepareRewarded(type = 'revive') {
     console.error(`Prepare Rewarded Error (${type})`, err);
     analyticsManager.logCustomEvent(analyticsManager.Events.AD_FAILED, {
       [analyticsManager.Params.AD_TYPE]: `rewarded_${type}`,
-      error_code: err?.message ?? 'unknown'
+      error_code: err?.message ?? 'unknown',
     });
   }
 }
@@ -872,12 +955,14 @@ async function showInterstitialAd() {
       document.getElementById('ad-loading-screen').classList.remove('hidden');
     }, 250);
 
-    // No need to await prepare again here if we pre-load it elsewhere, 
+    // No need to await prepare again here if we pre-load it elsewhere,
     // but the plugin handles it fine if it's already cached.
     await AdMob.showInterstitial();
-    
+
     lastAdTimestamp = Date.now();
-    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, { [analyticsManager.Params.AD_TYPE]: 'interstitial' });
+    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, {
+      [analyticsManager.Params.AD_TYPE]: 'interstitial',
+    });
   } catch (err) {
     console.error('Show Interstitial Error', err);
   } finally {
@@ -945,19 +1030,18 @@ async function showRewardedAd(type = 'revive', data = null) {
       adId: selectedAdId,
       isTesting: false,
       tagForChildDirectedTreatment: true,
-      maxAdContentRating: 'G'
+      maxAdContentRating: 'G',
     };
 
     // Map type to the readiness key (multiple types share the same ad unit)
-    const readinessKey = type === 'shop_coins' ? 'shop_coins'
-      : type === 'pity_revive' ? 'pity_revive'
-      : 'revive';
+    const readinessKey =
+      type === 'shop_coins' ? 'shop_coins' : type === 'pity_revive' ? 'pity_revive' : 'revive';
 
     // Optimization: If NOT already preloaded, call prepare which blocks until ready.
     // If it WAS preloaded, showRewardVideoAd should be instant.
     if (!window._rewardedAdsReady[readinessKey]) {
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('AD_TIMEOUT')), 10000)
+        setTimeout(() => reject(new Error('AD_TIMEOUT')), 10000),
       );
       await Promise.race([AdMob.prepareRewardVideoAd(options), timeoutPromise]);
     }
@@ -966,12 +1050,15 @@ async function showRewardedAd(type = 'revive', data = null) {
 
     await AdMob.showRewardVideoAd();
 
-    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, { [analyticsManager.Params.AD_TYPE]: 'rewarded' });
+    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, {
+      [analyticsManager.Params.AD_TYPE]: 'rewarded',
+    });
   } catch (err) {
-    const isNoFill = err.message === 'AD_TIMEOUT'
-      || err.message?.includes('No fill')
-      || err.message?.includes('eCPM floor')
-      || err.message?.includes('No ads');
+    const isNoFill =
+      err.message === 'AD_TIMEOUT' ||
+      err.message?.includes('No fill') ||
+      err.message?.includes('eCPM floor') ||
+      err.message?.includes('No ads');
     if (isNoFill) {
       adTimedOut = true;
       const loadingScreen = document.getElementById('ad-loading-screen');
@@ -979,7 +1066,7 @@ async function showRewardedAd(type = 'revive', data = null) {
       const msgEl = loadingScreen?.querySelector('#ad-loading-messages');
       if (spinner) spinner.style.display = 'none';
       if (msgEl) msgEl.innerHTML = `<p>⚠️ ${t('ad_unavailable')}</p>`;
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 2000));
     } else {
       console.error('Show Rewarded Error', err);
     }
@@ -995,7 +1082,8 @@ async function showRewardedAd(type = 'revive', data = null) {
       const spinner = loadingScreen?.querySelector('.loader-spinner');
       const msgEl = loadingScreen?.querySelector('#ad-loading-messages');
       if (spinner) spinner.style.display = '';
-      if (msgEl) msgEl.innerHTML = `<p data-i18n="ad_support_message">${t('ad_support_message')}</p>`;
+      if (msgEl)
+        msgEl.innerHTML = `<p data-i18n="ad_support_message">${t('ad_support_message')}</p>`;
     }
     loadingScreen?.classList.add('hidden');
     if (btn) {
@@ -1019,7 +1107,7 @@ async function showBannerAd() {
     if (consentInfo.status !== 'OBTAINED' && consentInfo.status !== 'NOT_REQUIRED') {
       return;
     }
-    
+
     // Safety check to prevent double banner
     if (isBannerCreated) return;
 
@@ -1031,18 +1119,19 @@ async function showBannerAd() {
       width: Math.round(window.screen.width),
       isTesting: false,
       tagForChildDirectedTreatment: true,
-      maxAdContentRating: 'G'
+      maxAdContentRating: 'G',
     });
     isBannerCreated = true;
     // Estimate adaptive banner height (overridden by bannerAdLoaded event with real value)
     const estimatedBannerH = Math.min(90, Math.max(50, Math.floor(window.innerWidth * 0.15)));
     document.documentElement.style.setProperty('--banner-height', `${estimatedBannerH}px`);
-    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, { [analyticsManager.Params.AD_TYPE]: 'banner' });
+    analyticsManager.logCustomEvent(analyticsManager.Events.AD_IMPRESSION, {
+      [analyticsManager.Params.AD_TYPE]: 'banner',
+    });
   } catch (e) {
     console.warn('AdMob Banner error (non-fatal):', e);
   }
 }
-
 
 function applyReviveReward(isPity = false) {
   // Hide Game Over
@@ -1056,7 +1145,7 @@ function applyReviveReward(isPity = false) {
   const screen = document.getElementById('reward-ready-screen');
   const textEl = document.getElementById('reward-ready-text');
   textEl.innerHTML = isPity ? t('pity_revive_confirmation') : t('revive_confirmation');
-  screen.dataset.revive = 'true';  // signal the continue button to resume the game
+  screen.dataset.revive = 'true'; // signal the continue button to resume the game
   screen.classList.remove('hidden');
 }
 
@@ -1074,14 +1163,14 @@ async function shuffleBoard() {
   }
 
   // Phase 1: Animate OUT
-  bolitas.forEach(bol => bol.el.classList.add('shuffling-out'));
-  
+  bolitas.forEach((bol) => bol.el.classList.add('shuffling-out'));
+
   // Wait for out animation (CSS is 0.4s)
-  await new Promise(resolve => setTimeout(resolve, 400));
+  await new Promise((resolve) => setTimeout(resolve, 400));
 
   // Extract colors
-  const flatItems = bolitas.map(bol => bol.color);
-  
+  const flatItems = bolitas.map((bol) => bol.color);
+
   // Clear grid vertically
   for (let r = 0; r < currentRows; r++) {
     for (let c = 0; c < currentCols; c++) {
@@ -1122,10 +1211,10 @@ async function shuffleBoard() {
   settleBoard();
 
   // Wait for in animation (CSS is 0.5s)
-  await new Promise(resolve => setTimeout(resolve, 500));
+  await new Promise((resolve) => setTimeout(resolve, 500));
 
   // Phase 3: Cleanup
-  newBolitas.forEach(el => el.classList.remove('shuffling-in'));
+  newBolitas.forEach((el) => el.classList.remove('shuffling-in'));
   isAnimating = false;
 
   if (!hasValidMove(grid)) {
@@ -1137,7 +1226,7 @@ async function shuffleBoard() {
 function checkExistingSession() {
   const savedUser = localStorage.getItem('bolitasUser');
   currentLevelIndex = parseInt(localStorage.getItem('bolitasLevel')) || 0;
-  
+
   // Update level display in map header if it exists
   const levelEl = document.getElementById('app-header-level');
   if (levelEl) levelEl.innerText = t('level_display', { val: currentLevelIndex + 1 });
@@ -1199,18 +1288,16 @@ function changeName() {
   document.getElementById('biome-map-screen').classList.add('hidden');
 }
 
-
-
 // --- Local Notifications (Retention) ---
 // Built at schedule time (not module load) so they use the player's current language
 function getInactivityNotifications() {
   return [
-    { id: 102, delayH: 24,  title: t('notif_inact_24_title'),  body: t('notif_inact_24_body') },
-    { id: 103, delayH: 48,  title: t('notif_inact_48_title'),  body: t('notif_inact_48_body') },
-    { id: 104, delayH: 72,  title: t('notif_inact_72_title'),  body: t('notif_inact_72_body') },
+    { id: 102, delayH: 24, title: t('notif_inact_24_title'), body: t('notif_inact_24_body') },
+    { id: 103, delayH: 48, title: t('notif_inact_48_title'), body: t('notif_inact_48_body') },
+    { id: 104, delayH: 72, title: t('notif_inact_72_title'), body: t('notif_inact_72_body') },
     { id: 105, delayH: 120, title: t('notif_inact_120_title'), body: t('notif_inact_120_body') },
     { id: 106, delayH: 168, title: t('notif_inact_168_title'), body: t('notif_inact_168_body') },
-    { id: 107, delayH: 240, title: t('notif_inact_240_title'), body: t('notif_inact_240_body') }
+    { id: 107, delayH: 240, title: t('notif_inact_240_title'), body: t('notif_inact_240_body') },
   ];
 }
 
@@ -1221,7 +1308,7 @@ async function requestNotificationPermission() {
     if (permStatus.display !== 'granted') {
       const result = await LocalNotifications.requestPermissions();
       analyticsManager.logCustomEvent(analyticsManager.Events.NOTIFICATION_PERMISSION, {
-        [analyticsManager.Params.PERMISSION_STATUS]: result.display
+        [analyticsManager.Params.PERMISSION_STATUS]: result.display,
       });
     }
   } catch (e) {
@@ -1246,13 +1333,13 @@ async function setupInactivityNotifications() {
 
     // Schedule new ones
     const now = Date.now();
-    let notificationsToSchedule = getInactivityNotifications().map(n => {
+    let notificationsToSchedule = getInactivityNotifications().map((n) => {
       const scheduleTime = new Date(now + n.delayH * 60 * 60 * 1000);
       return {
         id: n.id,
         title: n.title,
         body: n.body,
-        schedule: { at: scheduleTime }
+        schedule: { at: scheduleTime },
       };
     });
 
@@ -1261,7 +1348,7 @@ async function setupInactivityNotifications() {
       id: 201,
       title: t('notif_daily_quests_title'),
       body: t('notif_daily_quests_body'),
-      schedule: { at: new Date(getNextDailyReset()) }
+      schedule: { at: new Date(getNextDailyReset()) },
     });
 
     // Schedule Weekly Quest Notification (Next Monday 9 AM)
@@ -1269,7 +1356,7 @@ async function setupInactivityNotifications() {
       id: 202,
       title: t('notif_weekly_quests_title'),
       body: t('notif_weekly_quests_body'),
-      schedule: { at: new Date(getNextWeeklyReset()) }
+      schedule: { at: new Date(getNextWeeklyReset()) },
     });
 
     // Schedule Lives Full Notification
@@ -1296,7 +1383,7 @@ async function scheduleLivesNotification(batch = null) {
         id: 301,
         title: t('lives_full_notif_title'),
         body: t('lives_full_notif_body'),
-        schedule: { at: new Date(restoreTime) }
+        schedule: { at: new Date(restoreTime) },
       };
       if (batch) {
         batch.push(notif);
@@ -1359,11 +1446,17 @@ function initGame(isRevive = false, rerollAttempt = 0) {
   if (!isRevive) {
     analyticsManager.logCustomEvent(analyticsManager.Events.LEVEL_START, {
       [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
-      [analyticsManager.Params.BIOME_NAME]: getBiomeNameForLevel(currentLevelIndex + 1)
+      [analyticsManager.Params.BIOME_NAME]: getBiomeNameForLevel(currentLevelIndex + 1),
     });
     // Keep Crashlytics informed of current level for crash context
-    FirebaseCrashlytics.setCustomKey({ key: 'current_level', value: String(currentLevelIndex + 1) }).catch(() => {});
-    FirebaseCrashlytics.setCustomKey({ key: 'current_biome', value: getBiomeNameForLevel(currentLevelIndex + 1) }).catch(() => {});
+    FirebaseCrashlytics.setCustomKey({
+      key: 'current_level',
+      value: String(currentLevelIndex + 1),
+    }).catch(() => {});
+    FirebaseCrashlytics.setCustomKey({
+      key: 'current_biome',
+      value: getBiomeNameForLevel(currentLevelIndex + 1),
+    }).catch(() => {});
   }
 
   document.querySelector('.app-footer')?.classList.add('hidden');
@@ -1372,7 +1465,7 @@ function initGame(isRevive = false, rerollAttempt = 0) {
   document.getElementById('pass-level-btn')?.classList.add('hidden');
   document.getElementById('win-quests-area')?.classList.add('hidden');
   // showBannerAd() moved to boot flow to prevent AdMob race condition crash
-  
+
   // Ensure game components are visible
   document.querySelector('.game-area').classList.remove('hidden');
   const passCont = document.getElementById('pass-level-container');
@@ -1380,7 +1473,7 @@ function initGame(isRevive = false, rerollAttempt = 0) {
   passCont.style.visibility = 'hidden';
   document.getElementById('powerups-bar').classList.remove('hidden');
   document.getElementById('powerups-bar').style.visibility = '';
-  
+
   clearGridElements();
   elementPositionMap = new WeakMap(); // Clear position mapping for new game
   activePowerup = null;
@@ -1434,7 +1527,8 @@ function initGame(isRevive = false, rerollAttempt = 0) {
   }
 
   currentColorSet = COLORS;
-  if (uiHeaderMode) uiHeaderMode.innerText = `${t('level_display', { val: currentLevelIndex + 1 })}`;
+  if (uiHeaderMode)
+    uiHeaderMode.innerText = `${t('level_display', { val: currentLevelIndex + 1 })}`;
   document.getElementById('header-shop-btn')?.classList.remove('hidden');
   // Booster container removed in UI refactor
 
@@ -1468,19 +1562,12 @@ function initGame(isRevive = false, rerollAttempt = 0) {
           updateHeaderCoins,
           renderShopItems,
           setTutorialActive,
-          renderPowerups
+          renderPowerups,
         });
       }, 500);
     }
-
   }
 }
-
-
-
-
-
-
 
 // Remove every piece from the grid but keep the selection outline SVG that lives inside it
 function clearGridElements() {
@@ -1512,24 +1599,24 @@ function sizeGrid() {
     : 0;
 
   const availW = container.clientWidth - padX;
-  const availH = container.clientHeight - containerPadY - (header ? header.offsetHeight : 0) - barH - padY;
+  const availH =
+    container.clientHeight - containerPadY - (header ? header.offsetHeight : 0) - barH - padY;
 
   if (availW <= 0 || availH <= 0) return;
 
-  const w = Math.min(availW, availH * currentCols / currentRows);
-  const h = Math.min(availH, w * currentRows / currentCols);
+  const w = Math.min(availW, (availH * currentCols) / currentRows);
+  const h = Math.min(availH, (w * currentRows) / currentCols);
   uiGrid.style.width = Math.floor(w) + 'px';
   uiGrid.style.height = Math.floor(h) + 'px';
 
   // Constrain game-area height to remove dead vertical space on tall screens.
   // Safe because availH is computed from container (stable), not from gameArea itself.
-  gameArea.style.maxHeight = (Math.ceil(h) + padY) + 'px';
+  gameArea.style.maxHeight = Math.ceil(h) + padY + 'px';
 }
 
 function createBolita(r, c, color) {
   const el = document.createElement('div');
   el.className = 'bolita';
-
 
   el.dataset.color = color;
   el.dataset.row = r;
@@ -1545,7 +1632,7 @@ function createBolita(r, c, color) {
     color,
     el,
     r,
-    c
+    c,
   };
   grid[r][c] = bolitaObj;
   elementPositionMap.set(el, bolitaObj);
@@ -1583,7 +1670,7 @@ async function handleBolitaClick(startR, startC, el) {
   }
 
   // Check if it's already selected
-  const isAlreadySelected = selectedGroup.some(b => b.r === r && b.c === c);
+  const isAlreadySelected = selectedGroup.some((b) => b.r === r && b.c === c);
 
   if (isAlreadySelected) {
     // Proceed to pop
@@ -1625,7 +1712,7 @@ async function handleBolitaClick(startR, startC, el) {
     spawnPopParticles(groupToPop);
     if (groupToPop.length >= 6) showBigPopText(groupToPop.length);
 
-    groupToPop.forEach(bolita => {
+    groupToPop.forEach((bolita) => {
       bolita.el.classList.remove('selected');
       bolita.el.classList.add('popped');
       grid[bolita.r][bolita.c] = null;
@@ -1645,13 +1732,13 @@ async function handleBolitaClick(startR, startC, el) {
     spawnFloatingScore(points, comboMultiplier, el);
 
     // Wait for popping animation to start before moving others
-    await new Promise(res => setTimeout(res, 200));
+    await new Promise((res) => setTimeout(res, 200));
 
     settleBoard();
 
     // Clean up DOM elements
     setTimeout(() => {
-      groupToPop.forEach(bolita => {
+      groupToPop.forEach((bolita) => {
         if (bolita.el.parentNode) bolita.el.parentNode.removeChild(bolita.el);
       });
       isAnimating = false;
@@ -1685,7 +1772,7 @@ async function handleBolitaClick(startR, startC, el) {
     // Select new group
 
     // Clear previous selection visually
-    selectedGroup.forEach(b => {
+    selectedGroup.forEach((b) => {
       if (b.el) b.el.classList.remove('selected');
     });
     selectedGroup = [];
@@ -1696,15 +1783,14 @@ async function handleBolitaClick(startR, startC, el) {
     if (group.length >= MIN_GROUP) {
       if (isAudioEnabled) playSelectSound();
       selectedGroup = group;
-      selectedGroup.forEach(b => b.el.classList.add('selected'));
+      selectedGroup.forEach((b) => b.el.classList.add('selected'));
       drawSelectionOutline(selectedGroup);
       // If tutorial is active, advance to 'pop' phase
       if (isTutorialActive()) {
         handleTutorialProgress({
-          onComplete: returnToMainMenu
+          onComplete: returnToMainMenu,
         });
       }
-
     } else {
       if (isAudioEnabled) playErrorSound();
     }
@@ -1721,7 +1807,7 @@ function spawnFloatingScore(points, combo, targetEl) {
   const rect = targetEl.getBoundingClientRect();
   const parentRect = uiGrid.getBoundingClientRect();
 
-  floater.style.left = `${rect.left - parentRect.left + (rect.width / 2)}px`;
+  floater.style.left = `${rect.left - parentRect.left + rect.width / 2}px`;
   floater.style.top = `${rect.top - parentRect.top}px`;
 
   uiGrid.appendChild(floater);
@@ -1764,8 +1850,12 @@ function breakCombo() {
 // ─── PARTICLES ───────────────────────────────────────────────────────────────
 
 const COLOR_HEX = {
-  red: '#ef4444', blue: '#3b82f6', yellow: '#eab308',
-  green: '#22c55e', pink: '#ec4899', cyan: '#06b6d4',
+  red: '#ef4444',
+  blue: '#3b82f6',
+  yellow: '#eab308',
+  green: '#22c55e',
+  pink: '#ec4899',
+  cyan: '#06b6d4',
 };
 
 function spawnPopParticles(group) {
@@ -1776,9 +1866,10 @@ function spawnPopParticles(group) {
   const color = COLOR_HEX[group[0].color] || '#fff';
 
   // Find center of the group
-  let sumX = 0, sumY = 0;
+  let sumX = 0,
+    sumY = 0;
   let validRects = 0;
-  group.forEach(b => {
+  group.forEach((b) => {
     if (!b.el) return;
     const r = b.el.getBoundingClientRect();
     sumX += r.left + r.width / 2;
@@ -1841,7 +1932,7 @@ function showIngameToast(msg) {
 function checkQuestToasts() {
   try {
     const quests = getDailyQuests();
-    quests.forEach(q => {
+    quests.forEach((q) => {
       if (q.isComplete && !q.claimed && !shownQuestToasts.has(q.id)) {
         shownQuestToasts.add(q.id);
         showIngameToast(`✓ ${getQuestDescription(q)} +${q.reward} 🪙`);
@@ -1858,8 +1949,6 @@ function findBolitaByElement(el) {
   return null;
 }
 
-
-
 // Apply gravity and column collapse, then move the pieces' elements to match
 function settleBoard() {
   for (const { item, r, c } of [...applyGravity(grid), ...collapseEmptyColumns(grid)]) {
@@ -1872,8 +1961,6 @@ function settleBoard() {
   }
 }
 
-
-
 // --- Selection group outline (SVG marching ants) ---
 function drawSelectionOutline(group) {
   const svg = document.getElementById('selection-outline');
@@ -1884,12 +1971,13 @@ function drawSelectionOutline(group) {
   const cw = gridEl.offsetWidth / currentCols;
   const ch = gridEl.offsetHeight / currentRows;
 
-  const sel = new Set(group.map(b => `${b.r},${b.c}`));
+  const sel = new Set(group.map((b) => `${b.r},${b.c}`));
   let pathData = '';
 
   for (const b of group) {
     const { r, c } = b;
-    const x = c * cw, y = r * ch;
+    const x = c * cw,
+      y = r * ch;
 
     const edges = [
       [!sel.has(`${r - 1},${c}`), x, y, x + cw, y], // top
@@ -1917,10 +2005,6 @@ function clearSelectionOutline() {
   if (svg) svg.innerHTML = '';
 }
 // -------------------------------------------------------
-
-
-
-
 
 let _lastStarCount = 0;
 
@@ -1964,9 +2048,6 @@ function updateScore(points) {
 
 // updateModeButtons removed — only Career mode exists now
 
-
-
-
 // Hint system: highlight a valid group after inactivity
 function resetHintTimer() {
   clearTimeout(hintTimeout);
@@ -2002,15 +2083,15 @@ async function showGameOver(isWin = false) {
       [analyticsManager.Params.BIOME_NAME]: getBiomeNameForLevel(currentLevelIndex + 1),
       [analyticsManager.Params.DIFFICULTY]: _failConfig?.difficulty || 'unknown',
       [analyticsManager.Params.FAIL_REASON]: 'no_moves',
-      [analyticsManager.Params.SCORE_ACHIEVED]: score
+      [analyticsManager.Params.SCORE_ACHIEVED]: score,
     });
   }
 
   document.querySelector('.app-footer')?.classList.add('hidden');
   // Clear-board win condition: if board is empty, it's ALWAYS a win
   if (!isWin && isBoardClear(grid)) {
-     handleLevelComplete();
-     return;
+    handleLevelComplete();
+    return;
   }
 
   if (!isWin && isAudioEnabled) playGameOverSound();
@@ -2072,10 +2153,12 @@ async function showGameOver(isWin = false) {
   }
 
   if (currentMode === 'adventure') {
-    document.getElementById('play-again-btn').innerHTML = `<svg class="btn-icon"><use href="#icon-retry"></use></svg> ${t('retry')}`;
+    document.getElementById('play-again-btn').innerHTML =
+      `<svg class="btn-icon"><use href="#icon-retry"></use></svg> ${t('retry')}`;
     document.getElementById('play-again-btn').dataset.action = 'retry';
   } else {
-    document.getElementById('play-again-btn').innerHTML = `<svg class="btn-icon"><use href="#icon-home"></use></svg> ${t('back_to_menu')}`;
+    document.getElementById('play-again-btn').innerHTML =
+      `<svg class="btn-icon"><use href="#icon-home"></use></svg> ${t('back_to_menu')}`;
     document.getElementById('play-again-btn').dataset.action = 'menu';
   }
 
@@ -2135,7 +2218,10 @@ function handleLevelComplete() {
     const totalCompleted = parseInt(localStorage.getItem('bolitasTotalLevelsCompleted') || '0') + 1;
     localStorage.setItem('bolitasTotalLevelsCompleted', totalCompleted);
     analyticsManager.setUserProperty('total_levels_completed', String(totalCompleted));
-    FirebaseCrashlytics.setCustomKey({ key: 'highest_level', value: String(currentLevelIndex) }).catch(() => {});
+    FirebaseCrashlytics.setCustomKey({
+      key: 'highest_level',
+      value: String(currentLevelIndex),
+    }).catch(() => {});
   } else {
     // Replaying old level — move to next level for the session but don't overwrite saved max
     currentLevelIndex = completedLevel + 1;
@@ -2143,19 +2229,19 @@ function handleLevelComplete() {
   localStorage.removeItem('bolitasLevelFails');
 
   // Snapshot quest states before tracking
-  const questsBefore = getDailyQuests().map(q => q.isComplete);
+  const questsBefore = getDailyQuests().map((q) => q.isComplete);
 
   // Track economy
   trackLevelComplete();
   trackSingleGameScore(score);
 
   // Detect newly completed quests
-  const questsAfter = getDailyQuests().map(q => q.isComplete);
+  const questsAfter = getDailyQuests().map((q) => q.isComplete);
   const newlyCompleted = [];
   questsAfter.forEach((done, i) => {
     if (done && !questsBefore[i]) newlyCompleted.push(i);
   });
-  
+
   const questsArea = document.getElementById('win-quests-area');
   if (newlyCompleted.length > 0) {
     window._questJustCompletedIndices = newlyCompleted;
@@ -2174,13 +2260,13 @@ function handleLevelComplete() {
     [analyticsManager.Params.BIOME_NAME]: getBiomeNameForLevel(completedLevel + 1),
     [analyticsManager.Params.DIFFICULTY]: _completeConfig?.difficulty || 'unknown',
     [analyticsManager.Params.SCORE]: score,
-    [analyticsManager.Params.BOOSTERS_USED]: Object.keys(boostersUsedInLevel).length
+    [analyticsManager.Params.BOOSTERS_USED]: Object.keys(boostersUsedInLevel).length,
   });
 
   // --- Show Win Screen with paced animations ---
   const levelToCheck = completedLevel + 1;
   const levelData = getLevelData(levelToCheck);
-  const isBossLevel = (levelToCheck > 0 && levelToCheck % 15 === 0);
+  const isBossLevel = levelToCheck > 0 && levelToCheck % 15 === 0;
   let baseCoins = 0;
 
   if (isBossLevel) {
@@ -2203,7 +2289,7 @@ function handleLevelComplete() {
   const coinsEarned = baseCoins;
   window._winCoinsEarned = coinsEarned; // Store for x2 ad
 
-  const xpEarned = isNewLevel ? 100 + ((completedLevel + 1) * 10) : 10; // Small XP for replays
+  const xpEarned = isNewLevel ? 100 + (completedLevel + 1) * 10 : 10; // Small XP for replays
 
   // Store unlock info for level select animation
   if (isNewLevel) {
@@ -2217,9 +2303,10 @@ function handleLevelComplete() {
     t('win_winner'),
     t('win_amazing'),
     t('win_brilliant'),
-    t('win_nailed_it')
+    t('win_nailed_it'),
   ];
-  document.getElementById('win-title').innerText = WIN_TITLES[Math.floor(Math.random() * WIN_TITLES.length)];
+  document.getElementById('win-title').innerText =
+    WIN_TITLES[Math.floor(Math.random() * WIN_TITLES.length)];
   document.getElementById('win-score').innerText = score;
   document.getElementById('win-coins').innerText = coinsEarned > 0 ? `+${coinsEarned}` : '—';
   document.getElementById('win-xp').innerText = t('win_xp', { val: xpEarned });
@@ -2241,13 +2328,16 @@ function handleLevelComplete() {
   }
   const starsToAnimate = boardClearThisLevel ? 4 : scoreStars;
   for (let i = 1; i <= starsToAnimate; i++) {
-    setTimeout(() => {
-      const el = document.getElementById(`win-star-${i}`);
-      if (el) {
-        el.classList.add('filled', 'pop');
-        if (i === 4) el.classList.add('golden');
-      }
-    }, 300 + (i - 1) * 250);
+    setTimeout(
+      () => {
+        const el = document.getElementById(`win-star-${i}`);
+        if (el) {
+          el.classList.add('filled', 'pop');
+          if (i === 4) el.classList.add('golden');
+        }
+      },
+      300 + (i - 1) * 250,
+    );
   }
 
   // Show or hide x2 button
@@ -2264,7 +2354,8 @@ function handleLevelComplete() {
   const levelBefore = getPlayerLevel();
   document.getElementById('win-xp-bar').style.transition = 'none';
   document.getElementById('win-xp-bar').style.width = `${xpBefore * 100}%`;
-  document.getElementById('win-level-label').innerText = `${t('player_level_display', { val: levelBefore })} — ${Math.round(getXP())}/${getXPForNextLevel()} XP`;
+  document.getElementById('win-level-label').innerText =
+    `${t('player_level_display', { val: levelBefore })} — ${Math.round(getXP())}/${getXPForNextLevel()} XP`;
 
   // Hide reward elements initially to prevent flicker from previous level
   const rewardNotif = document.getElementById('win-reward-notif');
@@ -2292,10 +2383,10 @@ function handleLevelComplete() {
       if (startEl && endEl) {
         spawnFlyingCoins(Math.min(10, coinsEarned), startEl, endEl);
       }
-      
+
       addCoins(coinsEarned);
       if (isAudioEnabled) playCoinSound();
-      
+
       const headerCoins = document.getElementById('header-coin-count');
       headerCoins.classList.remove('reward-pulse');
       void headerCoins.offsetWidth;
@@ -2307,9 +2398,11 @@ function handleLevelComplete() {
   // Animate XP bar after 1000ms
   setTimeout(() => {
     const result = addXP(xpEarned);
-    document.getElementById('win-xp-bar').style.transition = 'width 1.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    document.getElementById('win-xp-bar').style.transition =
+      'width 1.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
     document.getElementById('win-xp-bar').style.width = `${getXPProgress() * 100}%`;
-    document.getElementById('win-level-label').innerText = `${t('player_level_display', { val: result.newLevel })} — ${result.newXP}/${getXPForNextLevel()} XP`;
+    document.getElementById('win-level-label').innerText =
+      `${t('player_level_display', { val: result.newLevel })} — ${result.newXP}/${getXPForNextLevel()} XP`;
 
     if (result.leveledUp) {
       document.getElementById('win-level-label').innerText += ` 🎉 ${t('level_up')}`;
@@ -2324,18 +2417,20 @@ function handleLevelComplete() {
     // Check if XP leveled up into a milestone
     const lastRewardedXPLevel = parseInt(localStorage.getItem('lastBoosterRewardLevel') || '0');
     const latestMilestone = Math.floor(playerLvl / 5) * 5;
-    
+
     if (latestMilestone > 0 && latestMilestone > lastRewardedXPLevel) {
       // Award booster for reaching this XP level milestone
       const randIdx = Math.floor(Math.random() * SHOP_BOOSTERS.length);
       const booster = SHOP_BOOSTERS[randIdx];
       addBoosterFree(booster.id, 1);
       localStorage.setItem('lastBoosterRewardLevel', String(latestMilestone));
-      
+
       if (rewardNotif) {
         rewardNotif.classList.remove('hidden');
         document.getElementById('win-reward-icon').innerText = booster.icon;
-        document.getElementById('win-reward-text').innerText = t('milestone_booster_unlocked', { booster: t(`booster_${booster.id}_name`) });
+        document.getElementById('win-reward-text').innerText = t('milestone_booster_unlocked', {
+          booster: t(`booster_${booster.id}_name`),
+        });
       }
       if (milestoneText) {
         milestoneText.innerText = t('next_reward_at', { val: nextRewardLvl });
@@ -2364,8 +2459,6 @@ function handleLevelComplete() {
   // Interstitial logic now handled in "Continuar" button click handler to avoid race conditions
 }
 
-
-
 function showCelebration() {
   clearInterval(timerInterval);
   clearTimeout(hintTimeout);
@@ -2378,7 +2471,16 @@ function showCelebration() {
   // Spawn confetti particles
   const container = document.getElementById('confetti-container');
   container.innerHTML = '';
-  const colors = ['#ff3b5c', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ff6b6b', '#06d6a0', '#ffd166'];
+  const colors = [
+    '#ff3b5c',
+    '#3b82f6',
+    '#10b981',
+    '#f59e0b',
+    '#8b5cf6',
+    '#ff6b6b',
+    '#06d6a0',
+    '#ffd166',
+  ];
 
   for (let i = 0; i < 60; i++) {
     const piece = document.createElement('div');
@@ -2430,11 +2532,12 @@ function showTutorial() {
       clearGridElements();
       return grid;
     },
-    setHeaderMode: (text) => { if (uiHeaderMode) uiHeaderMode.innerText = text; },
+    setHeaderMode: (text) => {
+      if (uiHeaderMode) uiHeaderMode.innerText = text;
+    },
     sizeGrid,
   });
 }
-
 
 // ======================== NEW UI FUNCTIONS ========================
 
@@ -2442,7 +2545,7 @@ function updateHeaderCoins() {
   const coins = getCoins();
   document.getElementById('header-coin-count').innerText = coins.toLocaleString();
   analyticsManager.setUserProperty('total_coins', coins);
-  
+
   const mapEl = document.getElementById('header-coin-count-map');
   if (mapEl) mapEl.innerText = coins.toLocaleString();
 
@@ -2464,8 +2567,8 @@ function spawnFlyingCoins(count, startEl, endEl) {
       const coin = document.createElement('div');
       coin.className = 'flying-coin';
       coin.innerText = '🪙';
-      coin.style.left = (startRect.left + startRect.width / 2 - containerRect.left) + 'px';
-      coin.style.top = (startRect.top + startRect.height / 2 - containerRect.top) + 'px';
+      coin.style.left = startRect.left + startRect.width / 2 - containerRect.left + 'px';
+      coin.style.top = startRect.top + startRect.height / 2 - containerRect.top + 'px';
       container.appendChild(coin);
 
       // Play sound for each coin in the sequence
@@ -2496,7 +2599,7 @@ function updateMenuPlayerLevel() {
   const xp = getXP();
   const xpNeeded = getXPForNextLevel();
   const pct = getXPProgress();
-  
+
   analyticsManager.setUserProperty('player_level', currentLevel);
 
   // User Settings panel
@@ -2508,14 +2611,14 @@ function updateMenuPlayerLevel() {
   if (settingsBar) settingsBar.style.width = `${pct * 100}%`;
   const settingsLabel = document.getElementById('user-settings-xp-label');
   if (settingsLabel) settingsLabel.innerText = t('xp_label', { current: xp, total: xpNeeded });
-  
+
   updateFooterQuestsGlow();
 }
 
 function updateFooterQuestsGlow() {
   const questsTab = document.getElementById('footer-tab-quests');
   if (!questsTab) return;
-  
+
   const hasRewards = hasClaimableQuests();
   questsTab.classList.toggle('glow-slow', hasRewards);
 
@@ -2532,11 +2635,13 @@ function openQuests() {
   document.getElementById('shop-screen').classList.add('hidden');
   document.getElementById('biome-map-screen')?.classList.add('hidden');
   // Set up tab switching
-  document.querySelectorAll('.quest-tab').forEach(tab => {
+  document.querySelectorAll('.quest-tab').forEach((tab) => {
     tab.classList.toggle('active', tab.dataset.qtab === 'daily');
     tab.onclick = () => {
       currentQuestTab = tab.dataset.qtab;
-      document.querySelectorAll('.quest-tab').forEach(t => t.classList.toggle('active', t === tab));
+      document
+        .querySelectorAll('.quest-tab')
+        .forEach((t) => t.classList.toggle('active', t === tab));
       renderQuests();
     };
   });
@@ -2550,32 +2655,34 @@ function openQuests() {
 let questCountdownInterval = null;
 function updateQuestCountdown() {
   if (questCountdownInterval) clearInterval(questCountdownInterval);
-  
+
   const el = document.getElementById('quest-reset-countdown');
   const tick = () => {
     const isWeekly = currentQuestTab === 'weekly';
     const nextReset = isWeekly ? getNextWeeklyReset() : getNextDailyReset();
     const diff = nextReset - Date.now();
-    
+
     if (diff <= 0) {
       el.innerText = t('refresh_available');
       renderQuests(); // Auto-refresh UI when timer hits zero
       return;
     }
-    
+
     const h = Math.floor((diff % 86400000) / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
     const s = Math.floor((diff % 60000) / 1000);
-    
+
     let timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     if (diff > 86400000) {
       const d = Math.floor(diff / 86400000);
       timeStr = `${d}d ${timeStr}`;
     }
-    const resetLabel = isWeekly ? t('weekly_reset_in', { time: timeStr }) : t('daily_reset_in', { time: timeStr });
+    const resetLabel = isWeekly
+      ? t('weekly_reset_in', { time: timeStr })
+      : t('daily_reset_in', { time: timeStr });
     el.innerText = resetLabel;
   };
-  
+
   tick();
   questCountdownInterval = setInterval(() => {
     if (document.getElementById('quests-screen').classList.contains('hidden')) {
@@ -2617,11 +2724,13 @@ function renderQuests() {
       </div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;">
         <div class="quest-reward">🪙 ${quest.reward}</div>
-        ${quest.isComplete && !quest.claimed
-        ? `<button class="quest-claim-btn" data-idx="${index}">${t('quest_claim')}</button>`
-        : !quest.isComplete
-          ? `<button class="quest-swap-btn" data-idx="${index}" title="${t('quest_swap_hint')}">🔄</button>`
-          : '<span style="font-size:0.8rem;color:var(--clr-green);">✓</span>'}
+        ${
+          quest.isComplete && !quest.claimed
+            ? `<button class="quest-claim-btn" data-idx="${index}">${t('quest_claim')}</button>`
+            : !quest.isComplete
+              ? `<button class="quest-swap-btn" data-idx="${index}" title="${t('quest_swap_hint')}">🔄</button>`
+              : '<span style="font-size:0.8rem;color:var(--clr-green);">✓</span>'
+        }
       </div>
     `;
 
@@ -2632,14 +2741,14 @@ function renderQuests() {
         const reward = claimFn(index);
         if (reward > 0) {
           if (isAudioEnabled) playCoinSound();
-          
+
           card.classList.add('claiming');
 
           const headerCoins = document.getElementById('header-coin-count');
           headerCoins.classList.remove('reward-pulse');
           void headerCoins.offsetWidth;
           headerCoins.classList.add('reward-pulse');
-          
+
           updateHeaderCoins();
           updateFooterQuestsGlow();
           setTimeout(() => {
@@ -2677,22 +2786,24 @@ function renderWinQuests(indices) {
   container.innerHTML = '';
 
   const quests = getDailyQuests();
-  indices.forEach(index => {
+  indices.forEach((index) => {
     const quest = quests[index];
     if (!quest) return;
 
     const card = document.createElement('div');
     card.className = `quest-card win-quest ${quest.isComplete ? 'completed' : ''}`;
-    
+
     card.innerHTML = `
       <div class="quest-icon">${quest.icon}</div>
       <div class="quest-info">
         <div class="quest-name">${getQuestDescription(quest)}</div>
         <div class="quest-reward">🪙 ${quest.reward}</div>
       </div>
-      ${quest.isComplete && !quest.claimed
-        ? `<button class="quest-claim-btn" data-idx="${index}">${t('quest_claim')}</button>`
-        : '<span class="quest-done-check">✓</span>'}
+      ${
+        quest.isComplete && !quest.claimed
+          ? `<button class="quest-claim-btn" data-idx="${index}">${t('quest_claim')}</button>`
+          : '<span class="quest-done-check">✓</span>'
+      }
     `;
 
     const claimBtn = card.querySelector('.quest-claim-btn');
@@ -2717,9 +2828,10 @@ function renderWinQuests(indices) {
 function updateLivesUI() {
   const lives = getLives();
   const secs = getRemainingTime();
-  const timerText = secs > 0
-    ? `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`
-    : '';
+  const timerText =
+    secs > 0
+      ? `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`
+      : '';
 
   const mapCount = document.getElementById('header-lives-count-map');
   const mapTimer = document.getElementById('header-lives-timer-map');
@@ -2758,17 +2870,17 @@ function showBiomeCompletedOverlay() {
     overlay.className = 'overlay';
     overlay.style.zIndex = '35000';
     overlay.style.background = 'rgba(0,0,0,0.85)';
-    
+
     const panel = document.createElement('div');
     panel.style.textAlign = 'center';
-    
+
     const title = document.createElement('h1');
     title.className = 'celebration-title';
     title.innerText = t('biome_completed') || 'Biome Completed!';
-    
+
     const confettiLayer = document.createElement('div');
     confettiLayer.className = 'confetti-fx';
-    
+
     panel.appendChild(title);
     overlay.appendChild(confettiLayer);
     overlay.appendChild(panel);
@@ -2777,16 +2889,16 @@ function showBiomeCompletedOverlay() {
   overlay.classList.remove('hidden');
   overlay.classList.remove('fade-out');
   overlay.classList.add('fade-in');
-  
+
   const confettiLayer = overlay.querySelector('.confetti-fx');
   confettiLayer.innerHTML = '';
   const colors = ['#0ff', '#f0f', '#ff0', '#0f0'];
-  for(let i=0; i<40; i++) {
+  for (let i = 0; i < 40; i++) {
     const p = document.createElement('div');
     p.className = 'neon-confetti';
-    p.style.left = (Math.random() * 100) + '%';
+    p.style.left = Math.random() * 100 + '%';
     p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-    p.style.animationDelay = (Math.random() * 0.5) + 's';
+    p.style.animationDelay = Math.random() * 0.5 + 's';
     p.style.boxShadow = `0 0 8px ${p.style.backgroundColor}`;
     confettiLayer.appendChild(p);
   }
@@ -2821,7 +2933,7 @@ function showLevelSelect(justUnlockedLevel = null) {
         milestoneEl.classList.add('hidden');
       }
     } catch (e) {
-      console.error("Error updating milestone text:", e);
+      console.error('Error updating milestone text:', e);
     }
   }
 
@@ -2834,7 +2946,7 @@ function showLevelSelect(justUnlockedLevel = null) {
   const { currentBlock, maxVisibleBlock } = getVisibleBiomeRange(currentGlobalLevel);
 
   const totalVisible = maxVisibleBlock + 1;
-  
+
   // Clean container
   container.innerHTML = '';
 
@@ -2876,7 +2988,10 @@ function showLevelSelect(justUnlockedLevel = null) {
 
     const nameEl = document.createElement('div');
     nameEl.className = 'biome-block-name';
-    nameEl.innerText = (isRevealed || isCurrentBiome) ? t(biomeBlock.biomeName) : `${t('biome_unknown')} #${biomeBlock.blockId}`;
+    nameEl.innerText =
+      isRevealed || isCurrentBiome
+        ? t(biomeBlock.biomeName)
+        : `${t('biome_unknown')} #${biomeBlock.blockId}`;
 
     const idEl = document.createElement('div');
     idEl.className = 'biome-block-id';
@@ -2943,7 +3058,7 @@ function showLevelSelect(justUnlockedLevel = null) {
       if (justUnlockedLevel + 1 >= firstLevel && justUnlockedLevel + 1 <= firstLevel + 14) {
         const relativeIdx = justUnlockedLevel - firstLevel + 1;
         const targetCell = levelGrid.children[relativeIdx];
-        
+
         if (targetCell) {
           targetCell.classList.add('new-unlocked');
           // Lock UI during this whole sequence
@@ -2957,7 +3072,7 @@ function showLevelSelect(justUnlockedLevel = null) {
               // column-reverse flips the VISUAL order, not the DOM order: the biome
               // just completed (blockIdx - 1) is still the previous DOM sibling
               const prevCard = card.previousElementSibling;
-              
+
               if (prevCard) {
                 // Hide new card immediately so it doesn't flash before the reveal animation
                 card.style.opacity = '0';
@@ -3020,7 +3135,7 @@ function showLevelSelect(justUnlockedLevel = null) {
 
   // Initial scroll to current biome if not animating a specific new level
   if (justUnlockedLevel === null) {
-     scrollToCurrentBiome();
+    scrollToCurrentBiome();
   }
 }
 
@@ -3040,45 +3155,59 @@ function showLevelPreStartScreen(levelIndex) {
   prestartAdsThisTry = 0;
   // Unlock UI whenever we open a modal or manual level select
   document.body.classList.remove('ui-locked');
-  
+
   // Hide game elements to ensure clean background
   document.querySelector('.game-area').classList.add('hidden');
   document.getElementById('powerups-bar').classList.add('hidden');
-  
+
   const prestartScreen = document.getElementById('level-prestart-screen');
   if (!prestartScreen) return;
 
   const config = getLevelData(levelIndex + 1);
 
   try {
-    document.getElementById('prestart-level-title').innerText = t('level_display', { val: levelIndex + 1 });
+    document.getElementById('prestart-level-title').innerText = t('level_display', {
+      val: levelIndex + 1,
+    });
     document.getElementById('prestart-target').innerText = `⭐ ${config.target}`;
-    
+
     let diffKey = 'diff_easy';
     let diffColor = 'var(--clr-green)';
-    if (config.difficulty === 'medium') { diffKey = 'diff_medium'; diffColor = 'var(--clr-yellow)'; }
-    if (config.difficulty === 'hard') { diffKey = 'diff_hard'; diffColor = 'var(--clr-orange)'; }
-    if (config.difficulty === 'extreme') { diffKey = 'diff_extreme'; diffColor = 'var(--clr-red)'; }
+    if (config.difficulty === 'medium') {
+      diffKey = 'diff_medium';
+      diffColor = 'var(--clr-yellow)';
+    }
+    if (config.difficulty === 'hard') {
+      diffKey = 'diff_hard';
+      diffColor = 'var(--clr-orange)';
+    }
+    if (config.difficulty === 'extreme') {
+      diffKey = 'diff_extreme';
+      diffColor = 'var(--clr-red)';
+    }
 
     const diffEl = document.getElementById('prestart-difficulty');
     const translatedDiff = t(diffKey);
-    diffEl.innerText = translatedDiff.includes(':') ? translatedDiff.split(':')[1].trim().toUpperCase() : translatedDiff.toUpperCase();
+    diffEl.innerText = translatedDiff.includes(':')
+      ? translatedDiff.split(':')[1].trim().toUpperCase()
+      : translatedDiff.toUpperCase();
     diffEl.style.color = diffColor;
     diffEl.style.border = `1px solid ${diffColor}`;
 
     // No recommendation block in new UI — ad buff button is always visible
 
-    // Render quick daily quests preview 
+    // Render quick daily quests preview
     const questsContainer = document.getElementById('prestart-quests-container');
     questsContainer.innerHTML = '';
-    const dailyQuests = getDailyQuests().filter(q => !q.claimed); 
+    const dailyQuests = getDailyQuests().filter((q) => !q.claimed);
     if (dailyQuests.length === 0) {
       questsContainer.innerHTML = `<div style="font-size: 0.85rem; color: #fff; opacity: 0.7;">${t('all_quests_done')}</div>`;
     } else {
-      dailyQuests.slice(0, 2).forEach(quest => { 
+      dailyQuests.slice(0, 2).forEach((quest) => {
         const pct = Math.min((quest.progress / quest.target) * 100, 100);
         const div = document.createElement('div');
-        div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; font-size: 0.85rem; width: 100%; color: #eee; line-height: 1.2;';
+        div.style.cssText =
+          'display:flex; justify-content:space-between; align-items:center; font-size: 0.85rem; width: 100%; color: #eee; line-height: 1.2;';
         div.innerHTML = `
           <div style="display:flex; align-items:center; gap:0.4rem; flex:1; min-width:0;">
              <span>${quest.icon}</span>
@@ -3132,10 +3261,10 @@ function startLevelFromSelect(levelIndex) {
   document.getElementById('biome-map-screen').classList.add('hidden');
   document.getElementById('login-screen').classList.add('hidden');
   if (isAudioEnabled) {
-    bgmAudio.play().catch(() => { });
+    bgmAudio.play().catch(() => {});
   }
   analyticsManager.logCustomEvent(analyticsManager.Events.LEVEL_START, {
-    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
   });
   trackGamePlayed('adventure');
   initGame();
@@ -3145,10 +3274,10 @@ function renderPowerups() {
   const bar = document.getElementById('powerups-bar');
   bar.classList.remove('hidden');
 
-  document.querySelectorAll('.powerup-btn').forEach(btn => {
+  document.querySelectorAll('.powerup-btn').forEach((btn) => {
     const bId = btn.dataset.booster;
-    const booster = SHOP_BOOSTERS.find(b => b.id === bId);
-    
+    const booster = SHOP_BOOSTERS.find((b) => b.id === bId);
+
     let isLocked = false;
     const level = currentLevelIndex + 1;
     if (booster && booster.unlockLevel) {
@@ -3205,7 +3334,7 @@ function handlePowerupClick(boosterId) {
     useBooster('shuffle');
     analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
       [analyticsManager.Params.BOOSTER_NAME]: 'shuffle',
-      [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+      [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
     });
     boostersUsedInLevel['shuffle'] = true;
     shuffleBoard();
@@ -3217,14 +3346,12 @@ function handlePowerupClick(boosterId) {
     useBooster('hint_pack');
     analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
       [analyticsManager.Params.BOOSTER_NAME]: 'hint_pack',
-      [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+      [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
     });
     showHint();
     renderPowerups();
     return;
   }
-
-
 
   // Target actions (Bomb, Color Bomb)
   activePowerup = boosterId;
@@ -3238,7 +3365,7 @@ async function activateBombAt(r, c) {
   useBooster('bomb');
   analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
     [analyticsManager.Params.BOOSTER_NAME]: 'bomb',
-    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
   });
   boostersUsedInLevel['bomb'] = true;
   activePowerup = null;
@@ -3260,7 +3387,7 @@ async function activateColorBomb(color) {
   useBooster('color_bomb');
   analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
     [analyticsManager.Params.BOOSTER_NAME]: 'color_bomb',
-    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
   });
   boostersUsedInLevel['color_bomb'] = true;
   activePowerup = null;
@@ -3291,7 +3418,7 @@ async function activateSniper(r, c) {
   useBooster('sniper');
   analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
     [analyticsManager.Params.BOOSTER_NAME]: 'sniper',
-    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
   });
   boostersUsedInLevel['sniper'] = true;
   activePowerup = null;
@@ -3327,7 +3454,7 @@ function showMagicBrushPicker(r, c, el) {
   const activeColors = currentColorSet.slice(0, currentColors);
   const currentColor = grid[r][c].color;
 
-  activeColors.forEach(clr => {
+  activeColors.forEach((clr) => {
     if (clr === currentColor) return; // skip the same colour
     const swatch = document.createElement('button');
     swatch.className = `magic-brush-swatch bolita-color-${clr}`;
@@ -3390,7 +3517,7 @@ function applyMagicBrush(r, c, newColor) {
   useBooster('magic_brush');
   analyticsManager.logCustomEvent(analyticsManager.Events.BOOSTER_USED, {
     [analyticsManager.Params.BOOSTER_NAME]: 'magic_brush',
-    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1
+    [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
   });
   boostersUsedInLevel['magic_brush'] = true;
   activePowerup = null;
@@ -3421,7 +3548,7 @@ async function executePowerupPop(groupToPop) {
   uiGrid.classList.add('shake');
   setTimeout(() => uiGrid.classList.remove('shake'), 350);
 
-  groupToPop.forEach(bolita => {
+  groupToPop.forEach((bolita) => {
     bolita.el.classList.add('popped');
     grid[bolita.r][bolita.c] = null;
   });
@@ -3443,12 +3570,12 @@ async function executePowerupPop(groupToPop) {
     spawnFloatingScore(points, comboMultiplier, groupToPop[0].el);
   }
 
-  await new Promise(res => setTimeout(res, 200));
+  await new Promise((res) => setTimeout(res, 200));
 
   settleBoard();
 
   setTimeout(() => {
-    groupToPop.forEach(bolita => {
+    groupToPop.forEach((bolita) => {
       if (bolita.el.parentNode) bolita.el.parentNode.removeChild(bolita.el);
     });
     isAnimating = false;
@@ -3465,14 +3592,14 @@ async function executePowerupPop(groupToPop) {
         showGameOver(false);
       }
     }
-  }, 400); 
+  }, 400);
 }
 
 /**
  * Synchronizes the footer tab active state.
  */
 function syncFooterTabs(activeTab) {
-  document.querySelectorAll('.app-footer-tab').forEach(tab => {
+  document.querySelectorAll('.app-footer-tab').forEach((tab) => {
     tab.classList.toggle('active', tab.id === `footer-tab-${activeTab}`);
   });
 }
@@ -3481,8 +3608,8 @@ function syncFooterTabs(activeTab) {
 
 const STREAK_KEY = 'gloop_active_streak';
 const STREAK_REWARDS = [
-  { day: 3,  coins: 100 },
-  { day: 7,  coins: 300 },
+  { day: 3, coins: 100 },
+  { day: 7, coins: 300 },
   { day: 14, coins: 500 },
   { day: 30, coins: 1000 },
 ];
@@ -3517,7 +3644,7 @@ function updateActiveStreak() {
   data.lastDate = today;
   localStorage.setItem(STREAK_KEY, JSON.stringify(data));
 
-  const reward = STREAK_REWARDS.find(r => r.day === data.count);
+  const reward = STREAK_REWARDS.find((r) => r.day === data.count);
   if (reward) {
     addCoins(reward.coins);
     showIngameToast(t('streak_toast', { days: data.count, coins: reward.coins }));
@@ -3536,4 +3663,3 @@ function renderActiveStreakBadge() {
     badge.classList.add('hidden');
   }
 }
-

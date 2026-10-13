@@ -6,7 +6,12 @@ export const MIN_GROUP = 3;
 // Spawned pieces never create a same-colour cluster larger than this
 export const MAX_SPAWN_CLUSTER = 5;
 
-const NEIGHBOURS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const NEIGHBOURS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
 
 function inBounds(grid, r, c) {
   return r >= 0 && r < grid.length && c >= 0 && c < grid[0].length;
@@ -56,7 +61,9 @@ export function predictClusterSize(grid, r, c, color) {
  * cluster bigger than MAX_SPAWN_CLUSTER. Falls back to any colour if all would.
  */
 export function pickSpawnColor(grid, r, c, palette, random = Math.random) {
-  let allowed = palette.filter(color => predictClusterSize(grid, r, c, color) <= MAX_SPAWN_CLUSTER);
+  let allowed = palette.filter(
+    (color) => predictClusterSize(grid, r, c, color) <= MAX_SPAWN_CLUSTER,
+  );
   if (allowed.length === 0) allowed = palette;
   return allowed[Math.floor(random() * allowed.length)];
 }
@@ -73,7 +80,7 @@ export function findValidGroups(grid, limit = Infinity) {
     for (let c = 0; c < grid[r].length; c++) {
       if (!grid[r][c] || visited.has(`${r},${c}`)) continue;
       const cells = getGroupCells(grid, r, c);
-      cells.forEach(cell => visited.add(`${cell.r},${cell.c}`));
+      cells.forEach((cell) => visited.add(`${cell.r},${cell.c}`));
       if (cells.length >= MIN_GROUP) {
         groups.push(cells);
         if (groups.length >= limit) return groups;
@@ -93,7 +100,7 @@ export function hasValidMove(grid) {
 }
 
 export function isBoardClear(grid) {
-  return grid.every(row => row.every(cell => !cell));
+  return grid.every((row) => row.every((cell) => !cell));
 }
 
 /**
@@ -127,7 +134,7 @@ export function collapseEmptyColumns(grid) {
   const moves = [];
   let emptyCols = 0;
   for (let c = 0; c < grid[0].length; c++) {
-    const isEmpty = grid.every(row => !row[c]);
+    const isEmpty = grid.every((row) => !row[c]);
     if (isEmpty) {
       emptyCols++;
       continue;

@@ -9,9 +9,21 @@
 // Each block of 15 levels follows a sawtooth wave:
 // 1-3: Easy, 4-8: Medium, 9-11: Hard, 12: Easy (breather), 13-14: Hard, 15: Extreme (Boss)
 const WAVE_PATTERN_15 = [
-  'easy', 'medium', 'easy', 'medium', 'medium',
-  'hard', 'easy', 'medium', 'hard', 'medium',
-  'hard', 'easy', 'hard', 'hard', 'extreme'
+  'easy',
+  'medium',
+  'easy',
+  'medium',
+  'medium',
+  'hard',
+  'easy',
+  'medium',
+  'hard',
+  'medium',
+  'hard',
+  'easy',
+  'hard',
+  'hard',
+  'extreme',
 ];
 
 // ======================== GRID CONFIGS BY DIFFICULTY ========================
@@ -23,11 +35,23 @@ function getGridConfig(difficulty, blockIndex) {
     case 'easy':
       return { rows: 5 + Math.min(scale, 2), cols: 5 + Math.min(scale, 2), colors: 3 };
     case 'medium':
-      return { rows: 7 + Math.min(scale, 2), cols: 7 + Math.min(scale, 2), colors: Math.min(3 + Math.floor(scale / 2), 4) };
+      return {
+        rows: 7 + Math.min(scale, 2),
+        cols: 7 + Math.min(scale, 2),
+        colors: Math.min(3 + Math.floor(scale / 2), 4),
+      };
     case 'hard':
-      return { rows: 8 + Math.min(scale, 2), cols: 8 + Math.min(scale, 2), colors: Math.min(4 + Math.floor(scale / 3), 5) };
+      return {
+        rows: 8 + Math.min(scale, 2),
+        cols: 8 + Math.min(scale, 2),
+        colors: Math.min(4 + Math.floor(scale / 3), 5),
+      };
     case 'extreme':
-      return { rows: 9 + Math.min(scale, 1), cols: 9 + Math.min(scale, 1), colors: Math.min(5 + Math.floor(scale / 4), 6) };
+      return {
+        rows: 9 + Math.min(scale, 1),
+        cols: 9 + Math.min(scale, 1),
+        colors: Math.min(5 + Math.floor(scale / 4), 6),
+      };
     default:
       return { rows: 7, cols: 7, colors: 4 };
   }
@@ -39,13 +63,17 @@ function calculateTargetScore(gridWidth, gridHeight, colorCount, difficulty) {
   let PEM, ME;
 
   if (D < 10.0) {
-    PEM = 200; ME = 15;
+    PEM = 200;
+    ME = 15;
   } else if (D < 15.0) {
-    PEM = 450; ME = 12;
+    PEM = 450;
+    ME = 12;
   } else if (D < 20.0) {
-    PEM = 900; ME = 8;
+    PEM = 900;
+    ME = 8;
   } else {
-    PEM = 1800; ME = 5;
+    PEM = 1800;
+    ME = 5;
   }
 
   const baseScore = PEM * ME;
@@ -169,7 +197,12 @@ export function generateBiomeBlock(blockIndex) {
     }
     gridConfig = { ...gridConfig, rows: size, cols: size };
 
-    let target = calculateTargetScore(gridConfig.rows, gridConfig.cols, gridConfig.colors, difficulty);
+    let target = calculateTargetScore(
+      gridConfig.rows,
+      gridConfig.cols,
+      gridConfig.colors,
+      difficulty,
+    );
 
     // Block 1 easing: reduce targets by 40% for a gentle intro
     if (blockIndex === 0) {
@@ -192,7 +225,12 @@ export function generateBiomeBlock(blockIndex) {
       levelData.rows = easyConfig.rows;
       levelData.cols = easyConfig.cols;
       levelData.colors = easyConfig.colors;
-      levelData.target = calculateTargetScore(easyConfig.rows, easyConfig.cols, easyConfig.colors, 'easy');
+      levelData.target = calculateTargetScore(
+        easyConfig.rows,
+        easyConfig.cols,
+        easyConfig.colors,
+        'easy',
+      );
     }
 
     levels.push(levelData);

@@ -5,10 +5,7 @@
  * for boosters, skins, and the coin ad tab.
  */
 
-import {
-  SHOP_BOOSTERS,
-  getCoins, getBoosterCount, buyBooster,
-} from './economy.js';
+import { SHOP_BOOSTERS, getCoins, getBoosterCount, buyBooster } from './economy.js';
 import { t } from './translations.js';
 import { playErrorSound, playPurchaseSound } from './audio.js';
 // tutorialState (not tutorial.js) to avoid the shop ↔ tutorial import cycle
@@ -24,7 +21,7 @@ const COIN_AD_DAILY_LIMIT = 5;
 export function getCoinAdState() {
   const today = new Date().toDateString();
   const lastDate = localStorage.getItem('bolitas_coinAdDate');
-  const count = lastDate === today ? (parseInt(localStorage.getItem('bolitas_coinAdCount')) || 0) : 0;
+  const count = lastDate === today ? parseInt(localStorage.getItem('bolitas_coinAdCount')) || 0 : 0;
   return { today, count, limit: COIN_AD_DAILY_LIMIT };
 }
 
@@ -49,9 +46,9 @@ export function initShop({ updateHeaderCoins, showRewardedAd }) {
   _showRewardedAd = showRewardedAd;
 
   // Wire up tab switching
-  document.querySelectorAll('.shop-tab').forEach(tab => {
+  document.querySelectorAll('.shop-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.shop-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.shop-tab').forEach((t) => t.classList.remove('active'));
       tab.classList.add('active');
       renderShopItems(tab.dataset.tab);
     });
@@ -65,7 +62,7 @@ export function initShop({ updateHeaderCoins, showRewardedAd }) {
  */
 export function updateShopNotifications() {
   const { canClaimToday } = getCalendarState();
-  
+
   // 1. Internal shop tab (Calendar)
   const calendarTab = document.querySelector('.shop-tab[data-tab="calendar"]');
   if (calendarTab) {
@@ -92,13 +89,13 @@ export function openShop() {
   document.getElementById('biome-map-screen')?.classList.add('hidden');
   document.getElementById('shop-coin-count').innerText = getCoins();
   renderShopItems('boosters');
-  document.querySelectorAll('.shop-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.shop-tab').forEach((t) => t.classList.remove('active'));
   document.querySelector('.shop-tab[data-tab="boosters"]').classList.add('active');
   document.getElementById('shop-screen').classList.remove('hidden');
   document.getElementById('powerups-bar')?.classList.add('hidden'); // Hide during shop
 
   // Sync footer
-  document.querySelectorAll('.app-footer-tab').forEach(tab => {
+  document.querySelectorAll('.app-footer-tab').forEach((tab) => {
     tab.classList.toggle('active', tab.id === 'footer-tab-shop');
   });
 
@@ -109,7 +106,7 @@ export function openShop() {
 
 export function closeShop() {
   document.getElementById('shop-screen').classList.add('hidden');
-  
+
   // Only reveal powerups bar if we're actually in a level (not the map)
   const isMapVisible = !document.getElementById('biome-map-screen')?.classList.contains('hidden');
   if (!isMapVisible) {
@@ -135,7 +132,7 @@ export function renderShopItems(tab) {
 // ---------- Boosters ----------
 
 function renderBoosters(container) {
-  SHOP_BOOSTERS.forEach(booster => {
+  SHOP_BOOSTERS.forEach((booster) => {
     const count = getBoosterCount(booster.id);
     const canAfford = getCoins() >= booster.price;
 
@@ -266,7 +263,7 @@ function renderCoinAd(container) {
       const originalText = btn.textContent;
       btn.textContent = t('limit_reached', { cur: limit, max: limit });
       playErrorSound();
-      setTimeout(() => btn.textContent = originalText, 2000);
+      setTimeout(() => (btn.textContent = originalText), 2000);
       return;
     }
 

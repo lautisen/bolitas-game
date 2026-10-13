@@ -16,31 +16,30 @@ import {
 
 // Build a grid from rows of letters: '.' is empty, any other letter is a colour
 function parse(...rows) {
-  return rows.map((row, r) =>
-    [...row].map((ch, c) => (ch === '.' ? null : { color: ch, r, c })));
+  return rows.map((row, r) => [...row].map((ch, c) => (ch === '.' ? null : { color: ch, r, c })));
 }
 
 function render(grid) {
-  return grid.map(row => row.map(cell => cell?.color ?? '.').join(''));
+  return grid.map((row) => row.map((cell) => cell?.color ?? '.').join(''));
 }
 
-const sortCells = cells => cells.map(({ r, c }) => `${r},${c}`).sort();
+const sortCells = (cells) => cells.map(({ r, c }) => `${r},${c}`).sort();
 
 describe('getGroupCells', () => {
   it('flood-fills orthogonally connected cells of the same colour', () => {
-    const grid = parse(
-      'aab',
-      'bab',
-      'aaa',
-    );
-    expect(sortCells(getGroupCells(grid, 0, 0))).toEqual(['0,0', '0,1', '1,1', '2,0', '2,1', '2,2']);
+    const grid = parse('aab', 'bab', 'aaa');
+    expect(sortCells(getGroupCells(grid, 0, 0))).toEqual([
+      '0,0',
+      '0,1',
+      '1,1',
+      '2,0',
+      '2,1',
+      '2,2',
+    ]);
   });
 
   it('does not connect diagonally', () => {
-    const grid = parse(
-      'ab',
-      'ba',
-    );
+    const grid = parse('ab', 'ba');
     expect(getGroupCells(grid, 0, 0)).toHaveLength(1);
   });
 
@@ -92,16 +91,11 @@ describe('pickSpawnColor', () => {
 });
 
 describe('findValidGroups', () => {
-  const grid = parse(
-    'aabb',
-    'abbc',
-    'ccdc',
-    'ddcc',
-  );
+  const grid = parse('aabb', 'abbc', 'ccdc', 'ddcc');
 
   it(`finds every group of at least ${MIN_GROUP}`, () => {
     const groups = findValidGroups(grid);
-    expect(groups.map(g => g.length).sort()).toEqual([3, 4, 4]);
+    expect(groups.map((g) => g.length).sort()).toEqual([3, 4, 4]);
   });
 
   it('stops at the limit', () => {
@@ -109,10 +103,7 @@ describe('findValidGroups', () => {
   });
 
   it('reports a stuck board', () => {
-    const stuck = parse(
-      'ab',
-      'ba',
-    );
+    const stuck = parse('ab', 'ba');
     expect(findValidGroup(stuck)).toBeNull();
     expect(hasValidMove(stuck)).toBe(false);
     expect(hasValidMove(grid)).toBe(true);
@@ -128,27 +119,13 @@ describe('isBoardClear', () => {
 
 describe('applyGravity', () => {
   it('drops pieces to the bottom of each column, keeping their order', () => {
-    const grid = parse(
-      'ab',
-      '.c',
-      'd.',
-      '..',
-    );
+    const grid = parse('ab', '.c', 'd.', '..');
     applyGravity(grid);
-    expect(render(grid)).toEqual([
-      '..',
-      '..',
-      'ab',
-      'dc',
-    ]);
+    expect(render(grid)).toEqual(['..', '..', 'ab', 'dc']);
   });
 
   it('returns the new position of every piece that moved', () => {
-    const grid = parse(
-      'a',
-      '.',
-      'b',
-    );
+    const grid = parse('a', '.', 'b');
     const a = grid[0][0];
     expect(applyGravity(grid)).toEqual([{ item: a, r: 1, c: 0 }]);
   });
@@ -156,15 +133,9 @@ describe('applyGravity', () => {
 
 describe('collapseEmptyColumns', () => {
   it('slides columns left over empty ones', () => {
-    const grid = parse(
-      '.a..b',
-      '.a.cb',
-    );
+    const grid = parse('.a..b', '.a.cb');
     collapseEmptyColumns(grid);
-    expect(render(grid)).toEqual([
-      'a.b..',
-      'acb..',
-    ]);
+    expect(render(grid)).toEqual(['a.b..', 'acb..']);
   });
 
   it('does nothing when there are no gaps', () => {

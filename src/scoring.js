@@ -24,7 +24,7 @@ export function nextComboLevel(comboLevel, msSinceLastPop) {
 // Stars: 1 at the target, 2 at +10%, 3 at +25%
 export function getStarCount(score, target) {
   if (score >= target * 1.25) return 3;
-  if (score >= target * 1.10) return 2;
+  if (score >= target * 1.1) return 2;
   if (score >= target) return 1;
   return 0;
 }
@@ -32,7 +32,7 @@ export function getStarCount(score, target) {
 /** Progress (0..1) towards the next star. */
 export function getStarProgress(score, target) {
   if (score >= target * 1.25) return 1;
-  if (score >= target * 1.10) return (score - target * 1.10) / (target * 0.15);
-  if (score >= target) return (score - target) / (target * 0.10);
+  if (score >= target * 1.1) return (score - target * 1.1) / (target * 0.15);
+  if (score >= target) return (score - target) / (target * 0.1);
   return Math.min(score / target, 1);
 }
