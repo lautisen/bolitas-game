@@ -37,7 +37,9 @@ Tap groups of three or more same-coloured blobs to pop them. Gravity pulls the r
 
 | Path | Contents |
 | :--- | :--- |
-| `src/main.js` | Game loop, board logic (flood-fill selection, gravity, column collapse), boosters, ads and screen flow |
+| `src/main.js` | Game loop, rendering, boosters, ads and screen flow |
+| `src/board.js` | Pure board logic: flood-fill groups, gravity, column collapse, move detection, spawn colours |
+| `src/scoring.js` | Points per pop, combo multipliers and star thresholds |
 | `src/biomes.js` | Procedural level generation and difficulty curve |
 | `src/economy.js` | Coins, XP and the daily and weekly quest system |
 | `src/shop.js`, `src/dailySpin.js`, `src/dailyCalendar.js` | Shop and retention features |
