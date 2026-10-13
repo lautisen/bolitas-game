@@ -347,15 +347,6 @@ function getLatestMonday9AM(now) {
   return d.getTime();
 }
 
-function getWeekKey() {
-  const now = new Date();
-  // Get ISO week number (Monday-based)
-  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
-  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-}
 
 function pickRandomWeeklyQuests(count) {
   const shuffled = [...WEEKLY_QUEST_TEMPLATES].sort(() => Math.random() - 0.5);

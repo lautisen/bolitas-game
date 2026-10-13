@@ -43,8 +43,6 @@ const bgmAudio = new Audio('./assets/bgm.mp3');
 bgmAudio.loop = true;
 bgmAudio.volume = 0.4;
 
-const COLS = 10;
-const ROWS = 12;
 let prestartAdsThisTry = 0;
 // Colors ordered by visual distinctiveness — levels using fewer colors get the first N entries
 const COLORS = ['red', 'blue', 'yellow', 'green', 'pink', 'cyan'];
@@ -70,7 +68,6 @@ function getBiomeNameForLevel(globalLevel) {
 
 let currentMode = 'adventure'; // Only 'adventure' mode remains
 let currentLevelIndex = 0;
-let timeRemaining = 0;
 let timerInterval = null;
 let currentRows = 10;
 let currentCols = 10;
@@ -79,9 +76,7 @@ let currentColorSet = COLORS; // which palette to use
 
 let grid = [];
 let score = 0;
-let uiScore; // This will link to the subtext area as well
 let uiHeaderMode;
-let uiHeaderScoreDetails;
 let uiGrid;
 let isAnimating = false;
 let selectedGroup = [];
@@ -113,7 +108,6 @@ let hintedElements = [];
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     uiHeaderMode = document.getElementById('header-mode-display');
-  uiHeaderScoreDetails = document.getElementById('header-score-details');
   uiGrid = document.getElementById('grid');
   const gameArea = document.querySelector('.game-area');
   if (gameArea) {
@@ -330,7 +324,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.setItem('bolitasAudioEnabled', isAudioEnabled);
     if (isAudioEnabled) {
       if (currentMode && document.getElementById('login-screen').classList.contains('hidden')) {
-        bgmAudio.play().catch(e => console.log('Autoplay prevented'));
+        bgmAudio.play().catch(() => console.log('Autoplay prevented'));
       }
     } else {
       bgmAudio.pause();
@@ -1049,14 +1043,6 @@ async function showBannerAd() {
   }
 }
 
-async function hideBannerAd() {
-  try {
-    await AdMob.hideBanner();
-    document.documentElement.style.setProperty('--banner-height', '0px');
-  } catch (err) {
-    // Ignore if no banner active
-  }
-}
 
 function applyReviveReward(isPity = false) {
   // Hide Game Over
@@ -1371,7 +1357,6 @@ function returnToMainMenu() {
 
 function initGame(isRevive = false, rerollAttempt = 0) {
   if (!isRevive) {
-    const levelData = getCurrentLevelConfig();
     analyticsManager.logCustomEvent(analyticsManager.Events.LEVEL_START, {
       [analyticsManager.Params.LEVEL_NUMBER]: currentLevelIndex + 1,
       [analyticsManager.Params.BIOME_NAME]: getBiomeNameForLevel(currentLevelIndex + 1)
@@ -1862,7 +1847,9 @@ function checkQuestToasts() {
         showIngameToast(`✓ ${getQuestDescription(q)} +${q.reward} 🪙`);
       }
     });
-  } catch (_) {}
+  } catch (_) {
+    // Quest toasts are cosmetic; never let them break the game loop
+  }
 }
 
 function findBolitaByElement(el) {
@@ -1886,26 +1873,6 @@ function settleBoard() {
 }
 
 
-function refillBoard() {
-  for (let c = 0; c < currentCols; c++) {
-    for (let r = 0; r < currentRows; r++) {
-      if (grid[r][c] === null) {
-        const color = pickSpawnColor(grid, r, c, currentColorSet.slice(0, currentColors));
-        createBolita(r, c, color);
-
-        // Little trick to animate falling from top
-        const b = grid[r][c];
-        b.el.style.transition = 'none';
-        b.el.style.setProperty('--row', r - currentRows);
-
-        // Force reflow
-        b.el.offsetHeight;
-        b.el.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s';
-        b.el.style.setProperty('--row', r);
-      }
-    }
-  }
-}
 
 // --- Selection group outline (SVG marching ants) ---
 function drawSelectionOutline(group) {
@@ -2635,7 +2602,6 @@ function renderQuests() {
   const isWeekly = currentQuestTab === 'weekly';
   const quests = isWeekly ? getWeeklyQuests() : getDailyQuests();
   const claimFn = isWeekly ? claimWeeklyQuest : claimQuest;
-  const swapFn = isWeekly ? swapWeeklyQuest : swapQuest;
 
   quests.forEach((quest, index) => {
     const card = document.createElement('div');
@@ -2868,7 +2834,6 @@ function showLevelSelect(justUnlockedLevel = null) {
   const { currentBlock, maxVisibleBlock } = getVisibleBiomeRange(currentGlobalLevel);
 
   const totalVisible = maxVisibleBlock + 1;
-  let scrollTarget = null;
   
   // Clean container
   container.innerHTML = '';
@@ -2878,7 +2843,6 @@ function showLevelSelect(justUnlockedLevel = null) {
     const firstLevel = blockIdx * 15 + 1;
     const isRevealed = isBiomeRevealed(blockIdx, maxUnlocked);
     const isCurrentBiome = blockIdx === currentBlock;
-    const isFog = !isRevealed && !isCurrentBiome;
 
     const card = document.createElement('div');
     card.className = 'biome-block-card';
@@ -2965,7 +2929,6 @@ function showLevelSelect(justUnlockedLevel = null) {
         if (levelData) cell.classList.add(`level-diff-${levelData.difficulty}`);
         cell.addEventListener('click', () => showLevelPreStartScreen(levelIdx));
         cell.innerText = globalLevel;
-        scrollTarget = card;
       } else {
         cell.classList.add('locked');
         cell.innerText = '🔒';

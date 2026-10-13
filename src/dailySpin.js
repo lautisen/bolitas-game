@@ -357,7 +357,7 @@ export function openDailySpinModal() {
     spinBtn.textContent = t('daily_spin_already_spun');
   }
 
-  respinBtn.addEventListener('click', () => triggerRespinAd(wheel, resultArea, spinBtn, respinBtn));
+  respinBtn.addEventListener('click', () => triggerRespinAd());
 }
 
 export function closeDailySpinModal() {
@@ -440,7 +440,6 @@ function buildWheel(isGolden = false) {
 
 // ======================== SPIN LOGIC ========================
 
-let _currentWinnerIndex = null;
 let _isSpinning = false;
 
 function startSpin(wheel, resultArea, spinBtn, respinBtn, isRespin) {
@@ -457,7 +456,6 @@ function startSpin(wheel, resultArea, spinBtn, respinBtn, isRespin) {
 
   // Pick random winner
   const winnerIndex = Math.floor(Math.random() * TOTAL);
-  _currentWinnerIndex = winnerIndex;
 
   // Calculate angle: land the pointer (top, -90°) on the center of the winner segment
   const winnerMidAngle = winnerIndex * SEGMENT_ANGLE + SEGMENT_ANGLE / 2; // degrees from top
@@ -501,7 +499,7 @@ function showSpinResult(prize, isDouble) {
   `;
 }
 
-function triggerRespinAd(wheel, resultArea, spinBtn, respinBtn) {
+function triggerRespinAd() {
   if (!_showRewardedAd) return;
   // State changes are now handled globally inside _showRewardedAd in main.js
   _showRewardedAd('daily_spin_respin');

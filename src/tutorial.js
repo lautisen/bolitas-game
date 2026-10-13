@@ -55,7 +55,7 @@ export function checkBoosterTutorial(levelNum, callbacks) {
 }
 
 export function startStrictBoosterTutorial(tutorial, callbacks) {
-  const { renderShopItems, updateHeaderCoins, renderPowerups } = callbacks;
+  const { renderShopItems, renderPowerups } = callbacks;
   setTutorialActive(true);
 
   // Step timeout: if player doesn't interact within 10s, exit gracefully
